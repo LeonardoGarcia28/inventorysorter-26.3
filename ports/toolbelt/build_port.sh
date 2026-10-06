@@ -60,6 +60,84 @@ s = s.replace(old, new)
 s = s.replace("GLFW.glfwSetCursorPos(mainWindow.handle(), (int) (windowWidth / 2 + fixedX), (int) (windowHeight / 2 + fixedY));",
               "SDLMouse.SDL_WarpMouseInWindow(mainWindow.handle(), (float) (windowWidth / 2 + fixedX), (float) (windowHeight / 2 + fixedY));")
 p.write_text(s)
+
+# Additional 26.3 API migrations discovered by compiler
+
+# Drop optional Curios integration until a 26.3-compatible Curios API is available.
+curios_finder = root / "src/main/java/dev/gigaherz/toolbelt/BeltFinderCurios.java"
+if curios_finder.exists():
+    curios_finder.unlink()
+
+p = root / "src/main/java/dev/gigaherz/toolbelt/ToolBelt.java"
+s = p.read_text()
+s = re.sub(r'\n\s*if \(ModList\.get\(\)\.isLoaded\("curios"\)\)\s*\{\s*BeltFinderCurios\.initCurios\(\);\s*\}', '', s, flags=re.S)
+
+# Data-generation APIs changed substantially in 26.3. Runtime resources are already generated
+# in the upstream repository, so keep runtime behavior and disable only the datagen implementation.
+marker = "    public static class DataGen"
+idx = s.find(marker)
+if idx >= 0:
+    brace = s.find("{", idx)
+    depth = 0
+    end = None
+    for i in range(brace, len(s)):
+        if s[i] == "{":
+            depth += 1
+        elif s[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    if end is not None:
+        replacement = """    public static class DataGen
+    {
+        public static void gatherData(GatherDataEvent.Client event)
+        {
+            // Runtime port: generated resources are already bundled upstream.
+        }
+    }"""
+        s = s[:idx] + replacement + s[end+1:]
+p.write_text(s)
+
+# RenderPipeline moved to RenderPearl in 26.3.
+p = root / "src/main/java/dev/gigaherz/toolbelt/client/radial/GenericRadialMenu.java"
+s = p.read_text().replace("import com.mojang.blaze3d.pipeline.RenderPipeline;",
+                          "import com.mojang.renderpearl.api.pipeline.RenderPipeline;")
+p.write_text(s)
+
+p = root / "src/main/java/dev/gigaherz/toolbelt/slot/BeltSlotScreen.java"
+s = p.read_text().replace("import com.mojang.blaze3d.pipeline.RenderPipeline;\n", "")
+p.write_text(s)
+
+# Player inventory/drop prediction API.
+p = root / "src/main/java/dev/gigaherz/toolbelt/slot/BeltAttachment.java"
+s = p.read_text()
+if "import net.minecraft.util.Prediction;" not in s:
+    s = s.replace("import net.minecraft.server.level.ServerPlayer;\n",
+                  "import net.minecraft.server.level.ServerPlayer;\nimport net.minecraft.util.Prediction;\n")
+s = s.replace("player.drop(stack, true, false);", "player.drop(stack, true, Prediction.SERVER_ONLY);")
+s = s.replace("player.getInventory().placeItemBackInInventory(stack, true);",
+              "player.getInventory().placeItemBackInInventory(stack, Prediction.SERVER_ONLY);")
+p.write_text(s)
+
+p = root / "src/main/java/dev/gigaherz/toolbelt/slot/BeltSlotMenu.java"
+s = p.read_text()
+if "import net.minecraft.util.Prediction;" not in s:
+    s = s.replace("import net.minecraft.server.level.ServerLevel;\n",
+                  "import net.minecraft.server.level.ServerLevel;\nimport net.minecraft.util.Prediction;\n")
+s = s.replace("player.drop(slotContents, false);",
+              "player.drop(slotContents, false, Prediction.SERVER_ONLY);")
+p.write_text(s)
+
+# Render-state and PoseStack changes.
+p = root / "src/main/java/dev/gigaherz/toolbelt/client/ToolBeltLayer.java"
+s = p.read_text()
+s = s.replace("avatarState.attackArm == HumanoidArm.RIGHT",
+              "avatarState.mainArm == HumanoidArm.RIGHT")
+s = s.replace("poseStack.mulPose(Axis.XP.rotationDegrees(40));",
+              "poseStack.rotate(Axis.XP.rotationDegrees(40));")
+p.write_text(s)
+
 PY
 
 cd work/toolbelt
