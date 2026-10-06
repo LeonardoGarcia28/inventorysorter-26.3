@@ -73,6 +73,47 @@ s = s.replace("import net.akkynaa.slotlib.client.compat.CuriosCompat;\n", "")
 s = re.sub(r'\n\s*if \(ModList\.get\(\)\.isLoaded\("curios"\)\) \{\s*this\.addRenderableWidget\(CuriosCompat\.createCuriosButtonForSlotLibScreen\(this\)\);\s*\}', '', s, flags=re.S)
 p.write_text(s)
 
+# 26.3 input and GUI API changes.
+p = root / "src/main/java/net/akkynaa/slotlib/client/KeyRegistry.java"
+x = p.read_text()
+x = x.replace("import org.lwjgl.glfw.GLFW;\n", "")
+x = x.replace("GLFW.GLFW_KEY_G", "103 /* SDLK_g */")
+p.write_text(x)
+
+p = root / "src/main/java/net/akkynaa/slotlib/client/gui/SlotLibButton.java"
+x = p.read_text()
+x = x.replace("import net.minecraft.client.gui.GuiGraphics;", "import net.minecraft.client.gui.GuiGraphicsExtractor;")
+x = x.replace("mc.setScreen(inventory);", "mc.gui.setScreen(inventory);")
+x = x.replace("getGuiLeft()", "getLeftPos()").replace("getGuiTop()", "getTopPos()")
+x = x.replace("renderContents(@Nonnull GuiGraphics guiGraphics", "extractContents(@Nonnull GuiGraphicsExtractor guiGraphics")
+x = x.replace("super.renderContents(guiGraphics, mouseX, mouseY, partialTicks);", "super.extractContents(guiGraphics, mouseX, mouseY, partialTicks);")
+p.write_text(x)
+
+p = root / "src/main/java/net/akkynaa/slotlib/client/gui/SlotLibScreen.java"
+x = p.read_text()
+x = x.replace("import net.minecraft.client.gui.GuiGraphics;", "import net.minecraft.client.gui.GuiGraphicsExtractor;")
+# The old render override only called super; extraction is handled by the base screen now.
+x = re.sub(r'\n\s*@Override\n\s*public void render\(@Nonnull GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTicks\) \{.*?\n\s*\}\n\n\s*@Override\n\s*protected void renderLabels',
+           '\n\n    @Override\n    protected void extractLabels', x, flags=re.S)
+x = x.replace("GuiGraphicsExtractor guiGraphics", "GuiGraphicsExtractor guiGraphics")
+x = x.replace("guiGraphics.drawString(", "guiGraphics.text(")
+x = x.replace("protected void renderBg(@Nonnull GuiGraphicsExtractor guiGraphics", "public void extractBackground(@Nonnull GuiGraphicsExtractor guiGraphics")
+x = x.replace("InventoryScreen.renderEntityInInventoryFollowsMouse(", "InventoryScreen.extractEntityInInventoryFollowsMouse(")
+p.write_text(x)
+
+p = root / "src/main/java/net/akkynaa/slotlib/common/inventory/container/SlotLibContainer.java"
+x = p.read_text()
+x = x.replace("import net.minecraft.world.item.ItemStack;", "import net.minecraft.world.item.ItemStack;\nimport net.minecraft.util.Prediction;")
+x = x.replace("playerIn.drop(itemstack1, false);", "playerIn.drop(itemstack1, false, Prediction.SERVER_ONLY);")
+p.write_text(x)
+
+p = root / "src/main/java/net/akkynaa/slotlib/common/event/SlotLibEventHandler.java"
+x = p.read_text()
+x = x.replace("player.level().getServer().getWorldData().getGameRules().get(GameRules.KEEP_INVENTORY)",
+              "player.level().getGameRules().get(GameRules.KEEP_INVENTORY)")
+x = x.replace("livingEntity.level().random.nextFloat()", "livingEntity.level().getRandom().nextFloat()")
+p.write_text(x)
+
 # ---------- More Offhand Slots ----------
 root = Path("work/moreoffhandslots")
 p = root / "gradle.properties"
