@@ -132,12 +132,91 @@ for a,b in repls.items(): s=s.replace(a,b)
 p.write_text(s)
 
 p = root / "build.gradle"
-s = p.read_text()
-s = s.replace("repositories {", "repositories {\n    mavenLocal()", 1)
-s = s.replace("JavaLanguageVersion.of(21)", "JavaLanguageVersion.of(25)")
-s = re.sub(r'^\s*jarJar\("net\.akkynaa:slotlib:\$\{slotlib_version\}"\)\s*$', '', s, flags=re.M)
-s = re.sub(r'\njarJar\.enable\(\).*?tasks\.named\(\'jar\'\) \{\s*archiveClassifier = \'slim\'\s*\}\n', '\n', s, flags=re.S)
-p.write_text(s)
+p.write_text(r"""plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.141'
+}
+
+version = mod_version
+group = mod_group_id
+
+repositories {
+    mavenLocal()
+    maven { url = 'https://maven.neoforged.net/releases' }
+}
+
+base {
+    archivesName = "\${mod_id}-neoforge"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+}
+
+neoForge {
+    version = project.neo_version
+    accessTransformers.from file('src/main/resources/META-INF/accesstransformer.cfg')
+
+    runs {
+        client { client() }
+        server {
+            server()
+            programArgument '--nogui'
+        }
+    }
+
+    mods {
+        "\${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    implementation "net.akkynaa:slotlib:\${slotlib_version}"
+}
+
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+        minecraft_version: minecraft_version,
+        minecraft_version_range: minecraft_version_range,
+        neo_version: neo_version,
+        mod_id: mod_id,
+        mod_name: mod_name,
+        mod_license: mod_license,
+        mod_version: mod_version,
+        mod_authors: mod_authors,
+        mod_description: mod_description
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+""")
+
+p = root / "settings.gradle"
+p.write_text("""pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url = 'https://maven.neoforged.net/releases' }
+    }
+}
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+""")
 
 p = root / "src/main/java/net/akkynaa/moreoffhandslots/client/input/KeyBindings.java"
 s = p.read_text()
