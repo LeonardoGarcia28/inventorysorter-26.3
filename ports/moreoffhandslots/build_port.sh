@@ -156,8 +156,6 @@ java {
 
 neoForge {
     version = project.neo_version
-    accessTransformers.from file('src/main/resources/META-INF/accesstransformer.cfg')
-
     runs {
         client { client() }
         server {
@@ -223,8 +221,241 @@ s = p.read_text()
 s = s.replace("import org.lwjgl.glfw.GLFW;\n", "")
 s = s.replace("GLFW.GLFW_MOUSE_BUTTON_5", "5 /* SDL_BUTTON_X2 */")
 s = s.replace("GLFW.GLFW_MOUSE_BUTTON_4", "4 /* SDL_BUTTON_X1 */")
-s = s.replace("GLFW.GLFW_KEY_LEFT_SHIFT", "1073742049 /* SDLK_LSHIFT */")
+s = s.replace("GLFW.GLFW_KEY_LEFT_SHIFT", "InputConstants.KEY_LSHIFT")
+s = s.replace("InputConstants.Type.KEYSYM", "InputConstants.Type.KEYBOARD")
 p.write_text(s)
+
+# Minecraft 26.3 moved screen ownership onto Minecraft.gui.
+p = root / "src/main/java/net/akkynaa/moreoffhandslots/client/input/ScrollWheelHandler.java"
+x = p.read_text().replace("minecraft.screen != null", "minecraft.gui.screen() != null")
+p.write_text(x)
+
+# Register the HUD layer with the 26.3 extraction graphics type.
+p = root / "src/main/java/net/akkynaa/moreoffhandslots/MoreOffhandSlots.java"
+x = p.read_text()
+x = x.replace("import net.minecraft.client.gui.GuiGraphics;", "import net.minecraft.client.gui.GuiGraphicsExtractor;")
+x = x.replace("(GuiGraphics guiGraphics, DeltaTracker deltaTracker)", "(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker)")
+p.write_text(x)
+
+# The old GuiMixin replaces vanilla's immediate-mode hotbar renderer, which no longer exists in 26.3.
+# The port renders its own offhand HUD layer and leaves the vanilla hotbar untouched.
+mixin = root / "src/main/java/net/akkynaa/moreoffhandslots/mixin/GuiMixin.java"
+if mixin.exists():
+    mixin.unlink()
+
+p = root / "src/main/resources/moreoffhandslots.mixins.json"
+x = p.read_text().replace('"client": [\n    "GuiMixin"\n  ]', '"client": []')
+p.write_text(x)
+
+# Keep the public renderer API, migrated to GuiGraphicsExtractor.
+p = root / "src/main/java/net/akkynaa/moreoffhandslots/api/IOffhandHudRenderer.java"
+p.write_text("""package net.akkynaa.moreoffhandslots.api;
+
+import net.akkynaa.moreoffhandslots.client.render.OffhandHudRenderer;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.List;
+
+public interface IOffhandHudRenderer {
+    void renderOffhandHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker);
+
+    void renderHotbarStyleOffhand(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, LocalPlayer player,
+                                  int screenWidth, int screenHeight, List<ItemStack> items);
+
+    void renderDefaultStyleOffhand(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, LocalPlayer player,
+                                   int screenWidth, int screenHeight, ItemStack prevItem,
+                                   ItemStack currentItem, ItemStack nextItem);
+
+    void renderDetailedStyleOffhand(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, LocalPlayer player,
+                                    int screenWidth, int screenHeight, ItemStack prevItem,
+                                    ItemStack currentItem, ItemStack nextItem);
+
+    int getMiddleX(LocalPlayer player, int screenWidth);
+
+    void renderItem(GuiGraphicsExtractor graphics, int x, int y, DeltaTracker deltaTracker,
+                    Player player, ItemStack stack, boolean doDecoration, boolean doBounce);
+
+    static void setOffhandHudRenderer(IOffhandHudRenderer renderer) {
+        OffhandHudRenderer.setOffhandRenderer(renderer);
+    }
+
+    static IOffhandHudRenderer getOffhandHudRenderer() {
+        return OffhandHudRenderer.getOffhandRenderer();
+    }
+}
+""")
+
+# Native 26.3 HUD implementation. It preserves all three mod HUD modes while using extraction rendering.
+p = root / "src/main/java/net/akkynaa/moreoffhandslots/client/render/OffhandHudRenderer.java"
+p.write_text("""package net.akkynaa.moreoffhandslots.client.render;
+
+import net.akkynaa.moreoffhandslots.api.IOffhandHudRenderer;
+import net.akkynaa.moreoffhandslots.api.OffhandInventory;
+import net.akkynaa.moreoffhandslots.capability.OffhandRegistry;
+import net.akkynaa.moreoffhandslots.client.config.ClientConfig;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameType;
+
+import java.util.List;
+import java.util.Objects;
+
+public final class OffhandHudRenderer implements IOffhandHudRenderer {
+    private static final int ITEM_SIZE = 16;
+    private static final int SLOT_SIZE = 20;
+    private static final int HOTBAR_WIDTH = 182;
+    private static final int HOTBAR_MARGIN = 25;
+
+    private static int hotbarOffset;
+    private static IOffhandHudRenderer instance = new OffhandHudRenderer();
+
+    public static int getHotbarOffset() {
+        return hotbarOffset;
+    }
+
+    private static void setHotbarOffset(int value) {
+        hotbarOffset = value;
+    }
+
+    public static void setOffhandRenderer(IOffhandHudRenderer renderer) {
+        instance = Objects.requireNonNull(renderer);
+    }
+
+    public static IOffhandHudRenderer getOffhandRenderer() {
+        return instance;
+    }
+
+    @Override
+    public void renderOffhandHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
+        Minecraft mc = Minecraft.getInstance();
+        if (ClientConfig.INDICATOR_STYLE.get() == ClientConfig.IndicatorStyle.VANILLA) return;
+        if (mc.gui.hud.isHidden()) return;
+        if (mc.gameMode == null || mc.gameMode.getPlayerMode() == GameType.SPECTATOR) return;
+
+        Entity entity = mc.getCameraEntity();
+        if (!(entity instanceof LocalPlayer player)) return;
+        if (net.akkynaa.moreoffhandslots.compat.BetterCombatCompat.hasTwoHandedWeaponEquipped(player)) return;
+
+        List<ItemStack> items = OffhandInventory.getOffhandItemsToRender(player);
+        if (items.isEmpty()) return;
+
+        ItemStack current = player.getItemInHand(InteractionHand.OFF_HAND);
+        if (current.isEmpty() && !ClientConfig.RENDER_EMPTY_OFFHAND.get()) return;
+
+        int w = graphics.guiWidth();
+        int h = graphics.guiHeight();
+        switch (ClientConfig.INDICATOR_STYLE.get()) {
+            case HOTBAR -> renderHotbarStyleOffhand(graphics, deltaTracker, player, w, h, items);
+            case DETAILED -> {
+                List<ItemStack> processed = ClientConfig.EMPTY_SLOT_BEHAVIOR.get() == ClientConfig.EmptySlotBehavior.COLLAPSE
+                        ? OffhandInventory.collapseConsecutiveEmpties(items) : items;
+                ItemStack next = processed.size() > 1 ? processed.get(1) : processed.getFirst();
+                ItemStack prev = processed.getLast();
+                renderDetailedStyleOffhand(graphics, deltaTracker, player, w, h, prev, current, next);
+            }
+            case DEFAULT -> {
+                List<ItemStack> processed = ClientConfig.EMPTY_SLOT_BEHAVIOR.get() == ClientConfig.EmptySlotBehavior.COLLAPSE
+                        ? OffhandInventory.collapseConsecutiveEmpties(items) : items;
+                ItemStack next = processed.size() > 1 ? processed.get(1) : processed.getFirst();
+                ItemStack prev = processed.getLast();
+                renderDefaultStyleOffhand(graphics, deltaTracker, player, w, h, prev, current, next);
+            }
+            default -> { }
+        }
+    }
+
+    @Override
+    public void renderHotbarStyleOffhand(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker,
+                                         LocalPlayer player, int screenWidth, int screenHeight,
+                                         List<ItemStack> items) {
+        int width = items.size() * SLOT_SIZE;
+        boolean right = player.getMainArm() == HumanoidArm.RIGHT;
+        int center = screenWidth / 2;
+        int x = right ? center - HOTBAR_WIDTH / 2 - 10 - width
+                      : center + HOTBAR_WIDTH / 2 + 10;
+        x += ClientConfig.X_OFFSET.get();
+        int y = screenHeight - 22 + ClientConfig.Y_OFFSET.get();
+
+        int selected = ClientConfig.EMPTY_SLOT_BEHAVIOR.get() == ClientConfig.EmptySlotBehavior.SKIP
+                ? OffhandInventory.getRenderPosition(player)
+                : player.getData(OffhandRegistry.OFFHAND_POSITION).getPosition();
+        if (!items.isEmpty()) selected = Math.floorMod(selected, items.size());
+
+        graphics.fill(x, y, x + width + 2, y + 22, 0x90000000);
+        graphics.fill(x + selected * SLOT_SIZE, y, x + selected * SLOT_SIZE + SLOT_SIZE + 2, y + 2, 0xFFFFFFFF);
+        graphics.fill(x + selected * SLOT_SIZE, y + 20, x + selected * SLOT_SIZE + SLOT_SIZE + 2, y + 22, 0xFFFFFFFF);
+
+        for (int i = 0; i < items.size(); i++) {
+            ItemStack stack = items.get(i);
+            int itemPosition = (i + selected) % items.size();
+            renderItem(graphics, x + itemPosition * SLOT_SIZE + 3, y + 3,
+                    deltaTracker, player, stack, true, false);
+        }
+
+        if (ClientConfig.ALIGN_TO_CENTER.get()) {
+            setHotbarOffset(right ? center - width / 2 : center + width / 2);
+        } else {
+            setHotbarOffset(center);
+        }
+    }
+
+    @Override
+    public void renderDefaultStyleOffhand(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker,
+                                          LocalPlayer player, int screenWidth, int screenHeight,
+                                          ItemStack prevItem, ItemStack currentItem, ItemStack nextItem) {
+        int middle = getMiddleX(player, screenWidth) + ClientConfig.X_OFFSET.get();
+        int y = screenHeight - ITEM_SIZE - 3 + ClientConfig.Y_OFFSET.get();
+        graphics.fill(middle - 23, y - 2, middle + 39, y + 18, 0x70000000);
+        renderItem(graphics, middle - 20, y, deltaTracker, player, prevItem, false, false);
+        renderItem(graphics, middle, y, deltaTracker, player, currentItem, true, false);
+        renderItem(graphics, middle + 20, y, deltaTracker, player, nextItem, false, false);
+    }
+
+    @Override
+    public void renderDetailedStyleOffhand(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker,
+                                           LocalPlayer player, int screenWidth, int screenHeight,
+                                           ItemStack prevItem, ItemStack currentItem, ItemStack nextItem) {
+        int middle = getMiddleX(player, screenWidth) + ClientConfig.X_OFFSET.get();
+        int y = screenHeight - ITEM_SIZE - 3 + ClientConfig.Y_OFFSET.get();
+        graphics.fill(middle - 24, y - 3, middle + 40, y + 19, 0x90000000);
+        graphics.fill(middle - 2, y - 3, middle + 18, y - 1, 0xFFFFFFFF);
+        graphics.fill(middle - 2, y + 17, middle + 18, y + 19, 0xFFFFFFFF);
+        renderItem(graphics, middle - 20, y, deltaTracker, player, prevItem, true, false);
+        renderItem(graphics, middle, y, deltaTracker, player, currentItem, true, false);
+        renderItem(graphics, middle + 20, y, deltaTracker, player, nextItem, true, false);
+    }
+
+    @Override
+    public int getMiddleX(LocalPlayer player, int screenWidth) {
+        int center = screenWidth / 2;
+        if (player.getMainArm() == HumanoidArm.RIGHT) {
+            return center - HOTBAR_WIDTH / 2 - HOTBAR_MARGIN - 29;
+        }
+        return center + HOTBAR_WIDTH / 2 + HOTBAR_MARGIN + 13;
+    }
+
+    @Override
+    public void renderItem(GuiGraphicsExtractor graphics, int x, int y, DeltaTracker deltaTracker,
+                           Player player, ItemStack stack, boolean doDecoration, boolean doBounce) {
+        if (stack.isEmpty()) return;
+        graphics.item(player, stack, x, y, 0);
+        if (doDecoration) {
+            graphics.itemDecorations(Minecraft.getInstance().font, stack, x, y);
+        }
+    }
+}
+""")
 
 # Explicit separate SlotLib dependency for the port build.
 p = root / "src/main/resources/META-INF/neoforge.mods.toml"
