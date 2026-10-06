@@ -92,12 +92,13 @@ p.write_text(x)
 p = root / "src/main/java/net/akkynaa/slotlib/client/gui/SlotLibScreen.java"
 x = p.read_text()
 x = x.replace("import net.minecraft.client.gui.GuiGraphics;", "import net.minecraft.client.gui.GuiGraphicsExtractor;")
-# The old render override only called super; extraction is handled by the base screen now.
-x = re.sub(r'\n\s*@Override\n\s*public void render\(@Nonnull GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTicks\) \{.*?\n\s*\}\n\n\s*@Override\n\s*protected void renderLabels',
-           '\n\n    @Override\n    protected void extractLabels', x, flags=re.S)
-x = x.replace("GuiGraphicsExtractor guiGraphics", "GuiGraphicsExtractor guiGraphics")
+x = x.replace("GuiGraphics guiGraphics", "GuiGraphicsExtractor guiGraphics")
+# 26.3 uses extraction rather than immediate rendering.
+x = re.sub(r'\n\s*@Override\n\s*public void render\(@Nonnull GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTicks\) \{.*?\n\s*\}\n(?=\s*@Override\n\s*protected void renderLabels)',
+           '\n', x, flags=re.S)
+x = x.replace("protected void renderLabels(", "protected void extractLabels(")
 x = x.replace("guiGraphics.drawString(", "guiGraphics.text(")
-x = x.replace("protected void renderBg(@Nonnull GuiGraphicsExtractor guiGraphics", "public void extractBackground(@Nonnull GuiGraphicsExtractor guiGraphics")
+x = x.replace("protected void renderBg(", "public void extractBackground(")
 x = x.replace("InventoryScreen.renderEntityInInventoryFollowsMouse(", "InventoryScreen.extractEntityInInventoryFollowsMouse(")
 p.write_text(x)
 
@@ -110,7 +111,7 @@ p.write_text(x)
 p = root / "src/main/java/net/akkynaa/slotlib/common/event/SlotLibEventHandler.java"
 x = p.read_text()
 x = x.replace("player.level().getServer().getWorldData().getGameRules().get(GameRules.KEEP_INVENTORY)",
-              "player.level().getGameRules().get(GameRules.KEEP_INVENTORY)")
+              "player.level().getServer().getGameRules().get(GameRules.KEEP_INVENTORY)")
 x = x.replace("livingEntity.level().random.nextFloat()", "livingEntity.level().getRandom().nextFloat()")
 p.write_text(x)
 
