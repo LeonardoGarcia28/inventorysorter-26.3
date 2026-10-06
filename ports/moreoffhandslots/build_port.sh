@@ -98,7 +98,8 @@ x = re.sub(r'\n\s*@Override\n\s*public void render\(@Nonnull GuiGraphicsExtracto
            '\n', x, flags=re.S)
 x = x.replace("protected void renderLabels(", "protected void extractLabels(")
 x = x.replace("guiGraphics.drawString(", "guiGraphics.text(")
-x = x.replace("protected void renderBg(", "public void extractBackground(")
+x = x.replace("protected void renderBg(@Nonnull GuiGraphicsExtractor guiGraphics, float partialTicks, int mouseX, int mouseY)",
+              "public void extractBackground(@Nonnull GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTicks)")
 x = x.replace("InventoryScreen.renderEntityInInventoryFollowsMouse(", "InventoryScreen.extractEntityInInventoryFollowsMouse(")
 p.write_text(x)
 
