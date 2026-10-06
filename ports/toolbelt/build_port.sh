@@ -16,7 +16,7 @@ root = Path("work/toolbelt")
 p = root / "build.gradle"
 s = p.read_text()
 s = s.replace('neoForge.version = "26.2.0.7-beta"', 'neoForge.version = "26.3.0.48-beta"')
-s = s.replace('version = "2.10.0"', 'version = "2.10.0-26.3-unofficial.1"')
+s = s.replace('version = "2.10.0"', 'version = "2.10.0-26.3-unofficial.2"')
 s = s.replace('artifactId project.archivesBaseName', 'artifactId base.archivesName.get()')
 p.write_text(s)
 
@@ -60,6 +60,27 @@ s = s.replace(old, new)
 s = s.replace("GLFW.glfwSetCursorPos(mainWindow.handle(), (int) (windowWidth / 2 + fixedX), (int) (windowHeight / 2 + fixedY));",
               "SDLMouse.SDL_WarpMouseInWindow(mainWindow.handle(), (float) (windowWidth / 2 + fixedX), (float) (windowHeight / 2 + fixedY));")
 p.write_text(s)
+
+
+# Minecraft 26.3 changed recipe_unlocked advancement conditions:
+# "recipe": "namespace:id" -> "recipes": ["namespace:id"].
+import json
+for adv in (root / "src/main/generated_resources").rglob("*.json"):
+    try:
+        obj = json.loads(adv.read_text())
+    except Exception:
+        continue
+    criteria = obj.get("criteria", {})
+    changed = False
+    for criterion in criteria.values():
+        if isinstance(criterion, dict) and criterion.get("trigger") == "minecraft:recipe_unlocked":
+            conditions = criterion.get("conditions", {})
+            if isinstance(conditions, dict) and "recipe" in conditions and "recipes" not in conditions:
+                recipe_id = conditions.pop("recipe")
+                conditions["recipes"] = [recipe_id]
+                changed = True
+    if changed:
+        adv.write_text(json.dumps(obj, indent=2) + "\n")
 
 # Additional 26.3 API migrations discovered by compiler
 
