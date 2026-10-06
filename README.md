@@ -3,3 +3,5 @@
 Unofficial GPLv3 port of cpw/inventorysorter to Minecraft 26.3 / NeoForge.
 
 This repository preserves the original GPLv3 license and authorship. Changes in this fork are intended only to update compatibility with Minecraft 26.3.
+
+Build target: Minecraft 26.3 / NeoForge 26.3.0.46-beta / Java 25.
