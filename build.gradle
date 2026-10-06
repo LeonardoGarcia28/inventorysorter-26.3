@@ -15,7 +15,7 @@ tasks.named('wrapper', Wrapper).configure {
     distributionType = Wrapper.DistributionType.BIN
 }
 
-version = '28.0.4-26.3-unofficial.1'
+version = '28.0.4-26.3-unofficial.2'
 group = 'cpw.mods'
 
 repositories {
