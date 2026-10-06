@@ -1,0 +1,186 @@
+import se.bjurr.gitchangelog.plugin.gradle.GitChangelogTask
+
+plugins {
+    id 'se.bjurr.gitchangelog.git-changelog-gradle-plugin' version '1.71.4'
+    id 'org.ajoberstar.grgit' version '4.1.1'
+    id 'com.github.ben-manes.versions' version '0.39.0'
+    id 'net.neoforged.moddev' version '2.0.141'
+    id "me.modmuss50.mod-publish-plugin" version "2.1.0"
+    id 'java-library'
+    id 'idea'
+    id 'maven-publish'
+}
+
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+version = '28.0.4-26.3-unofficial.1'
+group = 'cpw.mods'
+
+repositories {
+    mavenLocal()
+
+    maven {
+        url = 'https://cursemaven.com'
+        content {
+            includeGroup("curse.maven")
+        }
+    }
+}
+
+base {
+    archivesName = 'inventorysorter'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'inventorysorter'
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'inventorysorter'
+        }
+
+        data {
+            clientData()
+            programArguments.addAll '--mod', 'inventorysorter', '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "inventorysorter" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+//    runtimeOnly "curse.maven:relics-mod-445274:6444603"
+//    runtimeOnly "curse.maven:sophisticated-backpacks-422301:6586226"
+//    runtimeOnly "curse.maven:sophisticated-core-618298:6596310"
+//    runtimeOnly "curse.maven:curios-309927:6529130"
+//    runtimeOnly "curse.maven:octo-lib-916747:6011408"
+//    runtimeOnly "curse.maven:architectury-api-419699:5786327"
+}
+
+tasks.register('makeChangelog', GitChangelogTask) {
+    file = project.file('CHANGELOG.md')
+    fromRepo = file(".")
+    untaggedName = "Current release ${version}"
+    fromRef = project.findProperty('changelogStart') ?: '13.0'
+    templateContent = """
+# Inventory sorter changelog history
+
+## Version ${version} for Minecraft ${mc_version}
+
+{{#tags}}
+* {{name}}
+  {{#commits}}
+  * {{{messageTitle}}}
+  {{/commits}}
+{{/tags}}
+"""
+}
+
+publishMods {
+    def apiKey = project.hasProperty('curseforge_apikey') ? project.curseforge_apikey : '0'
+    dryRun = apiKey == '0'
+
+    file = jar.archiveFile
+    changelog = file('CHANGELOG.md').exists() ? file('CHANGELOG.md').text : "No changelog provided"
+    type = STABLE
+
+    curseforge {
+        modLoaders.add("neoforge")
+
+        accessToken = apiKey
+        projectId = "240633"
+        accessToken = apiKey
+
+        supported_minecraft_versions.split(",").each {
+            minecraftVersions.add(it.trim())
+        }
+
+        javaVersions.add(JavaVersion.VERSION_25)
+
+        clientRequired = true
+        serverRequired = true
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+                "Specification-Title": 'inventorysorter',
+                "Specification-Vendor": 'cpwmods',
+                "Specification-Version": '1', // We are version 1 of ourselves
+                "Implementation-Title": project.name,
+                "Implementation-Version": "${version}",
+                "Implementation-Vendor" :'cpwmods',
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+
+    archiveAppendix = mc_version
+}
+
+// This block of code expands all declared replace properties in the specified resource targets.
+// A missing property will result in an error. Properties are expanded using ${} Groovy notation.
+// When "copyIdeResources" is enabled, this will also run before the game launches in IDE environments.
+// See https://docs.gradle.org/current/dsl/org.gradle.language.jvm.tasks.ProcessResources.html
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+            mod_version            : project.version,
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/repo"
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

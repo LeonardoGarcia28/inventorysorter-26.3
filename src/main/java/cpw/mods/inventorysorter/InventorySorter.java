@@ -1,0 +1,229 @@
+/*
+ *     Copyright © 2016 cpw
+ *     This file is part of Inventorysorter.
+ *
+ *     Inventorysorter is free software: you can redistribute it and/or modify
+ *     it under the terms of the GNU General Public License as published by
+ *     the Free Software Foundation, either version 3 of the License, or
+ *     (at your option) any later version.
+ *
+ *     Inventorysorter is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ *
+ *     You should have received a copy of the GNU General Public License
+ *     along with Inventorysorter.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package cpw.mods.inventorysorter;
+
+import com.mojang.brigadier.context.CommandContext;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.synchronization.ArgumentTypeInfo;
+import net.minecraft.commands.synchronization.ArgumentTypeInfos;
+import net.minecraft.commands.synchronization.SingletonArgumentInfo;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.inventory.Slot;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.fml.InterModComms;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.fml.event.lifecycle.InterModProcessEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.util.*;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+/**
+ * Created by cpw on 08/01/16.
+ */
+
+@Mod(InventorySorter.MOD_ID)
+public class InventorySorter {
+    public static final String MOD_ID = "inventorysorter";
+    public static InventorySorter INSTANCE;
+
+    static final Logger LOGGER = LogManager.getLogger();
+    Identifier lastContainerType;
+    boolean debugLog;
+
+    private final Set<String> slotBlacklist = new HashSet<>();
+    private final Set<String> containerBlacklist = new HashSet<>();
+
+    private boolean dodgeMouseTweaks;
+
+    public InventorySorter(IEventBus modBus, ModContainer modContainer) {
+        INSTANCE = this;
+        final IEventBus bus = modBus;
+        bus.addListener(this::handleimc);
+        bus.addListener(this::onConfigLoad);
+        bus.addListener(this::onCommonLoaded);
+        Config.register(modContainer);
+        COMMAND_ARGUMENT_TYPES.register(bus);
+        NeoForge.EVENT_BUS.addListener(this::onCommandRegister);
+        KeyHandler.registerKeyHandlers(bus);
+        Network.registerPayloadHandlers(bus);
+    }
+
+    private void onCommonLoaded(final FMLCommonSetupEvent event) {
+        Integrations.init();
+    }
+
+    private void handleimc(final InterModProcessEvent evt) {
+        final Stream<InterModComms.IMCMessage> imc = InterModComms.getMessages("inventorysorter");
+        imc.forEach(this::handleimcmessage);
+    }
+
+    private void handleimcmessage(final InterModComms.IMCMessage msg) {
+        if ("slotblacklist".equals(msg.method())) {
+            final String slotBlacklistTarget = (String) msg.messageSupplier().get();
+            if (slotBlacklist.add(slotBlacklistTarget)) {
+                debugLog("SlotBlacklist added {}", ()->new String[] {slotBlacklistTarget});
+            }
+        }
+
+        if ("containerblacklist".equals(msg.method())) {
+            final Identifier slotContainerTarget = (Identifier) msg.messageSupplier().get();
+            if (containerBlacklist.add(slotContainerTarget.toString())) {
+                debugLog("ContainerBlacklist added {}", () -> new String[] {slotContainerTarget.toString()});
+            }
+        }
+    }
+
+    private void updateConfig() {
+        Config.ServerConfig.CONFIG.containerBlacklist.set(new ArrayList<>(containerBlacklist));
+        Config.ServerConfig.CONFIG.slotBlacklist.set(new ArrayList<>(slotBlacklist));
+        Config.ServerConfig.SPEC.save();
+    }
+
+    private void onCommandRegister(RegisterCommandsEvent evt) {
+        InventorySorterCommand.register(evt.getDispatcher());
+    }
+
+    boolean isSlotBlacklisted(Slot slot) {
+        return slotBlacklist.contains(slot.getClass().getName()) || Config.ServerConfig.CONFIG.slotBlacklist.get().contains(slot.getClass().getName());
+    }
+
+    boolean isContainerBlacklisted(Identifier container) {
+        return containerBlacklist.contains(container.toString()) || Config.ServerConfig.CONFIG.containerBlacklist.get().contains(container.toString());
+    }
+
+    void onConfigLoad(ModConfigEvent configEvent) {
+        // Don't load data on unloading
+        if (configEvent instanceof ModConfigEvent.Unloading) {
+            return;
+        }
+
+        switch (configEvent.getConfig().getType()) {
+            case SERVER:
+                this.slotBlacklist.addAll(Config.ServerConfig.CONFIG.slotBlacklist.get());
+                this.containerBlacklist.addAll(Config.ServerConfig.CONFIG.containerBlacklist.get());
+                break;
+            case CLIENT:
+                if (Config.ClientConfig.CONFIG.dodgeMousetweaks.get() && ModList.get().isLoaded("mousetweaks")) {
+                    this.dodgeMouseTweaks = true;
+                }
+                break;
+        }
+
+    }
+
+    final void debugLog(String message, Supplier<String[]> args) {
+        if (debugLog) {
+            LOGGER.error(message, (Object[]) args.get());
+        }
+    }
+
+    private static Component greenText(final String string) {
+        final Component tcs = Component.translatable(string);
+        tcs.getStyle().withColor(ChatFormatting.GREEN);
+        return tcs;
+    }
+
+    static int blackListAdd(final CommandContext<CommandSourceStack> context) {
+        final var containerType = context.getArgument("container", Identifier.class);
+        if (BuiltInRegistries.MENU.containsKey(containerType)) {
+            INSTANCE.containerBlacklist.add(containerType.toString());
+            INSTANCE.updateConfig();
+            context.getSource().sendSuccess(()->Component.translatable("inventorysorter.commands.inventorysorter.bladd.message", containerType.toString()), true);
+            return 1;
+        } else {
+            context.getSource().sendSuccess(()->Component.translatable("inventorysorter.commands.inventorysorter.badtype", containerType), true);
+            return 0;
+        }
+    }
+
+    static int blackListRemove(final CommandContext<CommandSourceStack> context) {
+        final var containerType = context.getArgument("container", Identifier.class);
+        if (BuiltInRegistries.MENU.containsKey(containerType) && INSTANCE.containerBlacklist.remove(containerType.toString())) {
+            INSTANCE.updateConfig();
+            context.getSource().sendSuccess(()->Component.translatable("inventorysorter.commands.inventorysorter.blremove.message", containerType.toString()), true);
+            return 1;
+        } else {
+            context.getSource().sendSuccess(()->Component.translatable("inventorysorter.commands.inventorysorter.badtype", containerType.toString()), true);
+            return 0;
+        }
+    }
+
+    static int showLast(final CommandContext<CommandSourceStack> context) {
+        if (INSTANCE.lastContainerType != null) {
+            context.getSource().sendSuccess(()->Component.translatable("inventorysorter.commands.inventorysorter.showlast.message", INSTANCE.lastContainerType.toString()), true);
+        } else {
+            context.getSource().sendSuccess(()->Component.translatable("inventorysorter.commands.inventorysorter.showlast.nosort"), true);
+        }
+        return 0;
+    }
+
+    static int showBlacklist(final CommandContext<CommandSourceStack> context) {
+        if (INSTANCE.containerBlacklist.isEmpty()) {
+            context.getSource().sendSuccess(()->Component.translatable("inventorysorter.commands.inventorysorter.showblacklist.empty"), true);
+        } else {
+            context.getSource().sendSuccess(()->Component.translatable("inventorysorter.commands.inventorysorter.showblacklist.message", listBlacklist()
+                    .map(Identifier::toString)
+                    .collect(Collectors.joining(", "))), true);
+        }
+        return 0;
+    }
+
+    static Stream<Identifier> listContainers() {
+        return BuiltInRegistries.MENU.entrySet().stream().map(e->e.getKey().identifier());
+    }
+
+    static Stream<Identifier> listBlacklist() {
+        return INSTANCE.containerBlacklist.stream().map(Identifier::parse);
+    }
+
+    boolean dontDodgeMouseTweaks() {
+        return !dodgeMouseTweaks;
+    }
+
+    public Set<String> containerblacklist() {
+        return containerBlacklist;
+    }
+
+    public Set<String> slotblacklist() {
+        return slotBlacklist;
+    }
+
+    private static final DeferredRegister<ArgumentTypeInfo<?, ?>> COMMAND_ARGUMENT_TYPES = DeferredRegister.create(BuiltInRegistries.COMMAND_ARGUMENT_TYPE, "inventorysorter");
+    private static final DeferredHolder<ArgumentTypeInfo<?,?>, SingletonArgumentInfo<InventorySorterCommand.ContainerIdentifierArgument>> CONTAINER_CLASS = COMMAND_ARGUMENT_TYPES.register("container_reslocation",
+            ()-> ArgumentTypeInfos.registerByClass(InventorySorterCommand.ContainerIdentifierArgument.class, SingletonArgumentInfo.contextFree(InventorySorterCommand.ContainerIdentifierArgument::new)));
+
+    public static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(MOD_ID, path);
+    }
+}

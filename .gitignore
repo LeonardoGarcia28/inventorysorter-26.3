@@ -1,0 +1,29 @@
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
+
+# gradle
+build
+.gradle
+
+# other
+eclipse
+run
+repo
+/CHANGELOG.html
+/CHANGELOG.md
+/.okhttpcache/
+/runs/
+
+.DS_Store
