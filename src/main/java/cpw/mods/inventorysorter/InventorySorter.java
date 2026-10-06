@@ -129,7 +129,7 @@ public class InventorySorter {
         }
 
         switch (configEvent.getConfig().getType()) {
-            case SERVER:
+            case SYNCED:
                 this.slotBlacklist.addAll(Config.ServerConfig.CONFIG.slotBlacklist.get());
                 this.containerBlacklist.addAll(Config.ServerConfig.CONFIG.containerBlacklist.get());
                 break;
