@@ -147,7 +147,7 @@ repositories {
 }
 
 base {
-    archivesName = "\${mod_id}-neoforge"
+    archivesName = "moreoffhandslots-neoforge"
 }
 
 java {
@@ -167,7 +167,7 @@ neoForge {
     }
 
     mods {
-        "\${mod_id}" {
+        "moreoffhandslots" {
             sourceSet(sourceSets.main)
         }
     }
@@ -180,7 +180,7 @@ configurations {
 }
 
 dependencies {
-    implementation "net.akkynaa:slotlib:\${slotlib_version}"
+    implementation "net.akkynaa:slotlib:" + slotlib_version
 }
 
 tasks.withType(ProcessResources).configureEach {
