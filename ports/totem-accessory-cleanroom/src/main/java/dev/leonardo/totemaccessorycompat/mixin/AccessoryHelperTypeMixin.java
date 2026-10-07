@@ -2,8 +2,6 @@ package dev.leonardo.totemaccessorycompat.mixin;
 
 import com.swacky.ohmega.api.AccessoryHelper;
 import com.swacky.ohmega.common.accessorytype.AccessoryType;
-import com.swacky.ohmega.common.accessorytype.AccessoryTypeManager;
-import dev.leonardo.totemaccessorycompat.TotemAccessoryCompat;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,7 +17,7 @@ public abstract class AccessoryHelperTypeMixin {
             CallbackInfoReturnable<AccessoryType> cir
     ) {
         if (item == Items.TOTEM_OF_UNDYING) {
-            cir.setReturnValue(AccessoryTypeManager.get(TotemAccessoryCompat.TOTEM_TYPE_ID));
+            cir.setReturnValue(AccessoryType.UTILITY.get());
         }
     }
 }
