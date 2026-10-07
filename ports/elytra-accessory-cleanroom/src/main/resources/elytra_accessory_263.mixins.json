@@ -6,6 +6,9 @@
   "mixins": [
     "OhmegaConfigTypeMixin"
   ],
+  "client": [
+    "WingsLayerMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }
