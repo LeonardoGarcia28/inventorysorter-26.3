@@ -14,7 +14,7 @@ root = Path("work/archerythings")
 # Target the exact NeoForge build used by the user's instance and mark this build.
 p = root / "gradle.properties"
 s = p.read_text()
-s = s.replace("version=26.3.0.0", "version=26.3.0.0-ohmega.4")
+s = s.replace("version=26.3.0.0", "version=26.3.0.0-ohmega.5")
 s = s.replace("neoforge_version=26.3.0.1-beta", "neoforge_version=26.3.0.48-beta")
 p.write_text(s)
 
