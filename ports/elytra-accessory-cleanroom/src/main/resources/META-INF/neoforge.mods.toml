@@ -1,0 +1,32 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="elytra_accessory_263"
+version="${version}"
+displayName="Elytra Accessory 26.3 Compat"
+authors="LeonardoGarcia28 / ChatGPT clean-room port"
+description='''Clean-room compatibility mod for Minecraft 26.3.
+Allows vanilla Elytra items to be equipped in Ohmega's Special accessory slot.'''
+
+[[dependencies.elytra_accessory_263]]
+modId="neoforge"
+type="required"
+versionRange="[26.3.0.48-beta,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.elytra_accessory_263]]
+modId="minecraft"
+type="required"
+versionRange="[26.3]"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.elytra_accessory_263]]
+modId="ohmega"
+type="required"
+versionRange="[1.5.21,)"
+ordering="AFTER"
+side="BOTH"
