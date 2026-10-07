@@ -1,0 +1,38 @@
+name: Build Archery Things 26.3 Ohmega Integration
+
+on:
+  push:
+    branches:
+      - archerythings-ohmega-26.3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle 9.4.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+
+      - name: Patch and build Archery Things
+        run: bash ports/archerythings/build_ohmega.sh
+
+      - name: Upload JARs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: archerythings-26.3-ohmega
+          path: artifacts/*.jar
+          if-no-files-found: error
