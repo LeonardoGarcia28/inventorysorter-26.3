@@ -14,7 +14,7 @@ root = Path("work/archerythings")
 # Target the exact NeoForge build used by the user's instance and mark this build.
 p = root / "gradle.properties"
 s = p.read_text()
-s = s.replace("version=26.3.0.0", "version=26.3.0.0-ohmega.1")
+s = s.replace("version=26.3.0.0", "version=26.3.0.0-ohmega.2")
 s = s.replace("neoforge_version=26.3.0.1-beta", "neoforge_version=26.3.0.48-beta")
 p.write_text(s)
 
@@ -146,7 +146,7 @@ if 'modId = "ohmega"' not in s:
 
 [[dependencies.archerythings]]
 modId = "ohmega"
-type = "optional"
+type = "required"
 versionRange = "[1.5.21,)"
 ordering = "AFTER"
 side = "BOTH"
@@ -191,6 +191,11 @@ p.write_text(s)
 
 PY
 
+
+# Apply maintained source overrides for the Ohmega edition.
+echo "Applying Archery Things Ohmega overrides..."
+cp -R ports/archerythings/overrides/common/src/main/java/com work/archerythings/common/src/main/java/
+cp -R ports/archerythings/overrides/neoforge/src/main/java/com work/archerythings/neoforge/src/main/java/
 
 cd work/archerythings
 gradle :neoforge:clean :neoforge:build --stacktrace
