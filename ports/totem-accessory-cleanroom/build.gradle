@@ -3,7 +3,7 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.147'
 }
 
-version = '1.0.4'
+version = '1.0.5'
 group = 'dev.leonardo.totemaccessorycompat'
 
 base {
