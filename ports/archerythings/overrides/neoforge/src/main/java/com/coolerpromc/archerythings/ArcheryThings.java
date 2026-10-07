@@ -1,6 +1,7 @@
 package com.coolerpromc.archerythings;
 
 import com.coolerpromc.archerythings.compat.OhmegaHelper;
+import com.coolerpromc.archerythings.network.packet.ClientBoundQuiverSyncPacket;
 import com.coolerpromc.archerythings.network.packet.ServerBoundQuiverMenuPacket;
 import com.coolerpromc.archerythings.network.packet.ServerBoundSelectQuiverSlotPacket;
 import com.coolerpromc.archerythings.platform.NeoForgeRegistryHelper;
@@ -50,6 +51,10 @@ public class ArcheryThings {
         registrar.playToServer(
                 ServerBoundSelectQuiverSlotPacket.TYPE,
                 ServerBoundSelectQuiverSlotPacket.STREAM_CODEC,
+                (payload, context) -> payload.handle(new NeoForgePayloadContext(context)));
+        registrar.playToClient(
+                ClientBoundQuiverSyncPacket.TYPE,
+                ClientBoundQuiverSyncPacket.STREAM_CODEC,
                 (payload, context) -> payload.handle(new NeoForgePayloadContext(context)));
         registrar.playToServer(
                 com.coolerpromc.archerythings.network.packet.ServerBoundToggleQuiverPickupPacket.TYPE,
