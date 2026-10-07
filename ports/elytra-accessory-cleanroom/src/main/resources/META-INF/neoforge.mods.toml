@@ -10,6 +10,9 @@ authors="LeonardoGarcia28 / ChatGPT clean-room port"
 description='''Clean-room compatibility mod for Minecraft 26.3.
 Allows vanilla Elytra items to be equipped in Ohmega's Special accessory slot.'''
 
+[[mixins]]
+config="elytra_accessory_263.mixins.json"
+
 [[dependencies.elytra_accessory_263]]
 modId="neoforge"
 type="required"
