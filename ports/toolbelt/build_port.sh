@@ -16,7 +16,7 @@ root = Path("work/toolbelt")
 p = root / "build.gradle"
 s = p.read_text()
 s = s.replace('neoForge.version = "26.2.0.7-beta"', 'neoForge.version = "26.3.0.48-beta"')
-s = s.replace('version = "2.10.0"', 'version = "2.10.0-26.3-unofficial.2"')
+s = s.replace('version = "2.10.0"', 'version = "2.10.0-26.3-unofficial.3"')
 s = s.replace('artifactId project.archivesBaseName', 'artifactId base.archivesName.get()')
 p.write_text(s)
 
@@ -81,6 +81,65 @@ for adv in (root / "src/main/generated_resources").rglob("*.json"):
                 changed = True
     if changed:
         adv.write_text(json.dumps(obj, indent=2) + "\n")
+
+
+# Minecraft 26.3 removed NeoForge's old ItemContainerContents#getSlots/getStackInSlot helpers.
+# Migrate Tool Belt to the vanilla 26.3 API: size() + itemCopies().
+p = root / "src/main/java/dev/gigaherz/toolbelt/belt/ToolBeltItem.java"
+s = p.read_text()
+s = s.replace(
+"""                List<ItemStack> newItems = new ArrayList<>();
+                int fill = Math.min(oldInv.getSlots(), Math.min(oldSize, newSize));
+                for (int i = 0; i < fill; i++)
+                    newItems.add(oldInv.getStackInSlot(i));""",
+"""                List<ItemStack> newItems = new ArrayList<>();
+                var oldItems = oldInv.itemCopies().toList();
+                int fill = Math.min(oldInv.size(), Math.min(oldSize, newSize));
+                for (int i = 0; i < fill; i++)
+                    newItems.add(oldItems.get(i));"""
+)
+s = s.replace(
+"""        for (int i = 0; i < inventory.getSlots(); i++)
+        {
+            ItemStack stack = inventory.getStackInSlot(i);""",
+"""        var items = inventory.itemCopies().toList();
+        for (int i = 0; i < inventory.size(); i++)
+        {
+            ItemStack stack = items.get(i);"""
+)
+p.write_text(s)
+
+p = root / "src/main/java/dev/gigaherz/toolbelt/client/ToolBeltLayer.java"
+s = p.read_text()
+s = s.replace(
+"""                ItemStack firstItem = cap.getSlots() >= 1 ? cap.getStackInSlot(0) : ItemStack.EMPTY;
+                ItemStack secondItem = cap.getSlots() >= 2 ? cap.getStackInSlot(1) : ItemStack.EMPTY;""",
+"""                var capItems = cap.itemCopies().toList();
+                ItemStack firstItem = cap.size() >= 1 ? capItems.get(0) : ItemStack.EMPTY;
+                ItemStack secondItem = cap.size() >= 2 ? capItems.get(1) : ItemStack.EMPTY;"""
+)
+p.write_text(s)
+
+p = root / "src/main/java/dev/gigaherz/toolbelt/common/ItemContainerWrapper.java"
+s = p.read_text()
+s = s.replace(
+"""        if (inv == null) return true;
+        for (int i = 0; i < inv.getSlots(); i++)
+        {
+            if (!inv.getStackInSlot(i).isEmpty())
+                return false;
+        }
+        return true;""",
+"""        if (inv == null) return true;
+        return inv.itemCopies().allMatch(ItemStack::isEmpty);"""
+)
+s = s.replace(
+"""        return slot < inv.getSlots() ? inv.getStackInSlot(slot) : ItemStack.EMPTY;""",
+"""        if (slot < 0 || slot >= inv.size())
+            return ItemStack.EMPTY;
+        return inv.itemCopies().skip(slot).findFirst().orElse(ItemStack.EMPTY);"""
+)
+p.write_text(s)
 
 # Additional 26.3 API migrations discovered by compiler
 
