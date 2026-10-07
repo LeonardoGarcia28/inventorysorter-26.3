@@ -70,10 +70,21 @@ public final class TotemAccessoryClient {
         int screenCenter = graphics.guiWidth() / 2;
         int y = graphics.guiHeight() - 23;
 
-        // Exact vanilla right-side offhand spacing.
-        int slotX = screenCenter + 91;
+        // HUD order: Elytra -> Totem -> Quiver.
+        // Each accessory keeps the original independent 29 px slot spacing.
+        int slotX = screenCenter + 91 + (hasEquippedElytra(player) ? 29 : 0);
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_OFFHAND_RIGHT, slotX, y, 29, 24);
         graphics.item(player, totem, slotX + 10, graphics.guiHeight() - 19, 77);
+    }
+
+    private static boolean hasEquippedElytra(Player player) {
+        for (ItemStack stack : AccessoryHelper.getAccessoryStacks(player)) {
+            if (stack.is(Items.ELYTRA)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static ItemStack findEquippedTotem(Player player) {
