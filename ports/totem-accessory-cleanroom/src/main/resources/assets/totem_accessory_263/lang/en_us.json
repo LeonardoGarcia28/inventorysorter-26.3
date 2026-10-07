@@ -1,3 +1,8 @@
 {
-  "accessory_type.totem_accessory_263.totem": "Totem"
+  "accessory_type.totem_accessory_263.totem": "Totem",
+  "totem_accessory_263.configuration.visuals": "Totem Visuals",
+  "totem_accessory_263.configuration.amulet_x": "Amulet X Position",
+  "totem_accessory_263.configuration.amulet_y": "Amulet Y Position",
+  "totem_accessory_263.configuration.amulet_z": "Amulet Z Position",
+  "totem_accessory_263.configuration.amulet_scale": "Amulet Scale"
 }
