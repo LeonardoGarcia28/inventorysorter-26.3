@@ -16,8 +16,11 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.DeathProtection;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
+import dev.leonardo.totemaccessorycompat.config.TotemAccessoryClientConfig;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 
 @Mod(TotemAccessoryCompat.MOD_ID)
@@ -28,7 +31,8 @@ public final class TotemAccessoryCompat {
 
     private static final IAccessory TOTEM_ACCESSORY = new IAccessory() {};
 
-    public TotemAccessoryCompat(IEventBus modBus) {
+    public TotemAccessoryCompat(IEventBus modBus, ModContainer container) {
+        container.registerConfig(ModConfig.Type.CLIENT, TotemAccessoryClientConfig.SPEC);
         AccessoryHelper.bindAccessory(Items.TOTEM_OF_UNDYING, TOTEM_ACCESSORY);
 
         modBus.addListener(TotemAccessoryCompat::overrideAccessoryType);
