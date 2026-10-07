@@ -36,35 +36,33 @@ public class ArrowHandler {
             quiverLike = Services.QUIVER.getQuiver(player);
         }
 
-        if (!quiverLike.isEmpty()) {
-            QuiverData contents = quiverLike.get(ModDataComponents.QUIVER_DATA.get());
-            if (contents != null && contents != QuiverData.EMPTY) {
-                int selected = quiverLike.getOrDefault(ModDataComponents.SELECTED.get(), 0);
+        if (quiverLike.isEmpty()) {
+            return;
+        }
 
-                if (selected >= 0 && selected < contents.getSlots()) {
-                    ItemStack checkArrow = contents.getStackInSlot(selected);
-                    if (checkArrow.isEmpty()) {
-                        return;
-                    }
+        QuiverData contents = quiverLike.getOrDefault(ModDataComponents.QUIVER_DATA.get(), QuiverData.EMPTY);
+        int selected = resolveAmmoSlot(quiverLike, contents);
 
-                    NonNullList<ItemStack> updatedItems =
-                            NonNullList.withSize(Math.max(QUIVER_SLOT_COUNT, contents.getSlots()), ItemStack.EMPTY);
-                    contents.copyInto(updatedItems);
+        if (selected < 0 || !hasAmmo) {
+            return;
+        }
 
-                    ItemStack arrow = updatedItems.get(selected);
-                    if (!arrow.isEmpty() && hasAmmo
-                            && bow.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY)
-                                    .getLevel(level.holderLookup(Registries.ENCHANTMENT)
-                                            .getOrThrow(Enchantments.INFINITY)) != 1) {
-                        arrow.shrink(1);
-                        if (arrow.isEmpty()) {
-                            updatedItems.set(selected, ItemStack.EMPTY);
-                        }
+        NonNullList<ItemStack> updatedItems =
+                NonNullList.withSize(Math.max(QUIVER_SLOT_COUNT, contents.getSlots()), ItemStack.EMPTY);
+        contents.copyInto(updatedItems);
 
-                        quiverLike.set(ModDataComponents.QUIVER_DATA.get(), QuiverData.fromItems(updatedItems));
-                    }
-                }
+        ItemStack arrow = updatedItems.get(selected);
+        if (!arrow.isEmpty()
+                && bow.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY)
+                        .getLevel(level.holderLookup(Registries.ENCHANTMENT)
+                                .getOrThrow(Enchantments.INFINITY)) != 1) {
+            arrow.shrink(1);
+            if (arrow.isEmpty()) {
+                updatedItems.set(selected, ItemStack.EMPTY);
             }
+
+            quiverLike.set(ModDataComponents.QUIVER_DATA.get(), QuiverData.fromItems(updatedItems));
+            Services.QUIVER.syncQuiver(player, quiverLike);
         }
     }
 
@@ -73,40 +71,29 @@ public class ArrowHandler {
             ItemStack chestEquipment = player.getItemBySlot(EquipmentSlot.CHEST);
             ItemStack legEquipment = player.getItemBySlot(EquipmentSlot.LEGS);
             ItemStack quiverLike = ItemStack.EMPTY;
-            boolean chestHasArrow = false;
-            boolean legHasArrow = false;
 
             if (chestEquipment.is(ModItems.QUIVER.get()) && hasArrow(chestEquipment)) {
                 quiverLike = chestEquipment;
-                chestHasArrow = true;
             } else if (chestEquipment.has(ModDataComponents.STORED_QUIVER.get())
                     && hasArrow(chestEquipment.get(ModDataComponents.STORED_QUIVER.get()).stack())) {
                 quiverLike = chestEquipment.get(ModDataComponents.STORED_QUIVER.get()).stack();
-                chestHasArrow = true;
             } else if (legEquipment.has(ModDataComponents.STORED_QUIVER.get())
                     && hasArrow(legEquipment.get(ModDataComponents.STORED_QUIVER.get()).stack())) {
                 quiverLike = legEquipment.get(ModDataComponents.STORED_QUIVER.get()).stack();
-                legHasArrow = true;
             } else if (Services.QUIVER.isQuiverEquipped(player)) {
                 quiverLike = Services.QUIVER.getQuiver(player);
             }
 
-            if (!quiverLike.isEmpty() && (quiverLike.getItem() == ModItems.QUIVER.get()
-                    || quiverLike.has(ModDataComponents.STORED_QUIVER.get()))) {
-                QuiverData contents = quiverLike.getOrDefault(ModDataComponents.QUIVER_DATA.get(), QuiverData.EMPTY);
-                int selected = quiverLike.getOrDefault(ModDataComponents.SELECTED.get(), 0);
+            if (!quiverLike.isEmpty()) {
+                QuiverData contents =
+                        quiverLike.getOrDefault(ModDataComponents.QUIVER_DATA.get(), QuiverData.EMPTY);
+                int selected = resolveAmmoSlot(quiverLike, contents);
 
-                if (selected >= 0 && selected < contents.getSlots()) {
-                    ItemStack selectedStack = contents.getStackInSlot(selected);
-                    if (!selectedStack.isEmpty()) {
-                        return selectedStack;
-                    }
+                if (selected >= 0) {
+                    Services.QUIVER.syncQuiver(player, quiverLike);
+                    return contents.getStackInSlot(selected);
                 }
 
-                player.sendOverlayMessage(Component.translatable("message.archerythings.no_quiver_slot"));
-            } else if (!quiverLike.isEmpty()) {
-                player.sendOverlayMessage(Component.translatable("message.archerythings.no_quiver_slot"));
-            } else if (!chestHasArrow && !legHasArrow) {
                 player.sendOverlayMessage(Component.translatable("message.archerythings.no_quiver_slot"));
             }
         }
@@ -114,14 +101,57 @@ public class ArrowHandler {
         return ammo;
     }
 
-    private static boolean hasArrow(ItemStack quiverLike) {
-        if (!quiverLike.isEmpty() && (quiverLike.getItem() == ModItems.QUIVER.get()
-                || quiverLike.has(ModDataComponents.STORED_QUIVER.get()))) {
-            QuiverData contents = quiverLike.getOrDefault(ModDataComponents.QUIVER_DATA.get(), QuiverData.EMPTY);
-            int selected = quiverLike.getOrDefault(ModDataComponents.SELECTED.get(), 0);
+    /**
+     * Keep the explicit orange selection when it contains ammo. If it is empty,
+     * automatically fall through to the first non-empty slot among all 27.
+     */
+    private static int resolveAmmoSlot(ItemStack quiver, QuiverData contents) {
+        int selected = quiver.getOrDefault(ModDataComponents.SELECTED.get(), 0);
 
-            if (selected >= 0 && selected < contents.getSlots()) {
-                return !contents.getStackInSlot(selected).isEmpty();
+        if (selected >= 0 && selected < contents.getSlots()
+                && !contents.getStackInSlot(selected).isEmpty()) {
+            return selected;
+        }
+
+        int limit = Math.min(QUIVER_SLOT_COUNT, contents.getSlots());
+        for (int i = 0; i < limit; i++) {
+            if (!contents.getStackInSlot(i).isEmpty()) {
+                if (selected != i) {
+                    quiver.set(ModDataComponents.SELECTED.get(), i);
+                }
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static boolean hasArrow(ItemStack quiverLike) {
+        if (quiverLike.isEmpty()) {
+            return false;
+        }
+
+        ItemStack quiver = quiverLike;
+        if (quiverLike.has(ModDataComponents.STORED_QUIVER.get())) {
+            quiver = quiverLike.get(ModDataComponents.STORED_QUIVER.get()).stack();
+        }
+
+        if (quiver.getItem() != ModItems.QUIVER.get()) {
+            return false;
+        }
+
+        QuiverData contents = quiver.getOrDefault(ModDataComponents.QUIVER_DATA.get(), QuiverData.EMPTY);
+        int selected = quiver.getOrDefault(ModDataComponents.SELECTED.get(), 0);
+
+        if (selected >= 0 && selected < contents.getSlots()
+                && !contents.getStackInSlot(selected).isEmpty()) {
+            return true;
+        }
+
+        int limit = Math.min(QUIVER_SLOT_COUNT, contents.getSlots());
+        for (int i = 0; i < limit; i++) {
+            if (!contents.getStackInSlot(i).isEmpty()) {
+                return true;
             }
         }
 
@@ -211,7 +241,9 @@ public class ArrowHandler {
         if (!arrowStack.isEmpty()) {
             for (int i = 0; i < QUIVER_SLOT_COUNT; i++) {
                 if (updatedItems.get(i).isEmpty()) {
-                    int amount = Math.min(arrowStack.getCount(), Math.min(arrowStack.getMaxStackSize(), 64));
+                    int amount = Math.min(
+                            arrowStack.getCount(),
+                            Math.min(arrowStack.getMaxStackSize(), 64));
                     ItemStack inserted = arrowStack.copy();
                     inserted.setCount(amount);
                     updatedItems.set(i, inserted);
