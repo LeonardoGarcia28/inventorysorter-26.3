@@ -80,10 +80,16 @@ public final class TotemAccessoryClient {
         PoseStack poseStack = event.getPoseStack();
         poseStack.pushPose();
 
-        // Front of the upper chest / base of the neck.
-        // Player render origin is at the feet, and the model faces local -Z.
-        poseStack.translate(0.0F, 1.38F, -0.245F);
-        poseStack.scale(0.22F, 0.22F, 0.22F);
+        // Anchor the amulet to the animated torso itself. This makes it inherit
+        // body yaw/pitch/crouch/swim/fall-flying transforms instead of remaining
+        // in camera/world-relative space.
+        event.getRenderer().getModel().body.translateAndRotate(poseStack);
+
+        // Upper chest / base of the neck, slightly in front of the body surface.
+        // ModelPart transforms use 1/16-block units; these offsets are already
+        // expressed in world/model space after body.translateAndRotate().
+        poseStack.translate(0.0F, 0.13F, -0.155F);
+        poseStack.scale(0.20F, 0.20F, 0.20F);
 
         ItemStackRenderState renderState = new ItemStackRenderState();
         minecraft.getItemModelResolver().updateForTopItem(
