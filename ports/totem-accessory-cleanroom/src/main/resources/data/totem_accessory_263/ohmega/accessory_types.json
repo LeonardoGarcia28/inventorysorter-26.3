@@ -1,0 +1,8 @@
+{
+  "totem": {
+    "displayHoverText": true,
+    "emptySlotTexture": "minecraft:shield",
+    "hoverTextColor": "0xffaa00",
+    "priority": 100
+  }
+}
