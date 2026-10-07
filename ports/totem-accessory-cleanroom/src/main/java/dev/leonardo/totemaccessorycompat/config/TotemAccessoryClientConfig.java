@@ -31,7 +31,7 @@ public final class TotemAccessoryClientConfig {
         AMULET_Z = builder
                 .translation("totem_accessory_263.configuration.amulet_z")
                 .comment("Depth offset while wearing an item in the chest armor slot.")
-                .defineInRange("amuletZ", -0.18D, -2.0D, 2.0D);
+                .defineInRange("amuletZ", -0.185D, -2.0D, 2.0D);
 
         AMULET_Z_NO_CHEST = builder
                 .translation("totem_accessory_263.configuration.amulet_z_no_chest")
@@ -41,7 +41,7 @@ public final class TotemAccessoryClientConfig {
         AMULET_SCALE = builder
                 .translation("totem_accessory_263.configuration.amulet_scale")
                 .comment("Visual size of the Totem amulet.")
-                .defineInRange("amuletScale", 0.25D, 0.05D, 1.00D);
+                .defineInRange("amuletScale", 0.30D, 0.05D, 1.00D);
 
         builder.pop();
 
