@@ -19,6 +19,10 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import org.jspecify.annotations.NonNull;
 
+import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+
 @Mod(ElytraAccessoryCompat.MOD_ID)
 public final class ElytraAccessoryCompat {
     public static final String MOD_ID = "elytra_accessory_263";
@@ -32,10 +36,18 @@ public final class ElytraAccessoryCompat {
             AttributeModifier.Operation.ADD_VALUE
     );
 
+    // Server-side durability watcher. Weak keys avoid retaining disconnected players.
+    // We only send a sync when the numeric damage value actually changes.
+    private static final Map<ServerPlayer, Integer> LAST_SYNCED_DAMAGE = new WeakHashMap<>();
+
     private static final IAccessory ELYTRA_ACCESSORY = new IAccessory() {
         @Override
         public void tick(@NonNull Player player, @NonNull ItemStack stack) {
             updateGlidingAttribute(player, stack);
+
+            if (player instanceof ServerPlayer serverPlayer) {
+                syncDurabilityIfChanged(serverPlayer, stack);
+            }
 
             if (!(player instanceof ServerPlayer serverPlayer)
                     || !(player.level() instanceof ServerLevel serverLevel)
@@ -48,22 +60,26 @@ public final class ElytraAccessoryCompat {
 
             stack.hurtAndBreak(1, serverLevel, serverPlayer, broken -> {});
 
-            int slot = AccessoryHelper.getSlot(stack);
-            if (slot >= 0) {
-                AccessoryHelper.getContainer(player).onContentsChanged(slot);
-            }
-
+            syncDurabilityIfChanged(serverPlayer, stack);
             updateGlidingAttribute(player, stack);
         }
 
         @Override
         public void onEquip(@NonNull Player player, @NonNull ItemStack stack) {
             updateGlidingAttribute(player, stack);
+
+            if (player instanceof ServerPlayer serverPlayer) {
+                LAST_SYNCED_DAMAGE.put(serverPlayer, stack.getDamageValue());
+            }
         }
 
         @Override
         public void onUnequip(@NonNull Player player, @NonNull ItemStack stack) {
             removeGlidingAttribute(player);
+
+            if (player instanceof ServerPlayer serverPlayer) {
+                LAST_SYNCED_DAMAGE.remove(serverPlayer);
+            }
         }
 
         @Override
@@ -79,6 +95,32 @@ public final class ElytraAccessoryCompat {
 
     private static void overrideAccessoryType(AccessoryOverrideTypesEvent event) {
         event.overrideRemaps.put(Items.ELYTRA, AccessoryType.SPECIAL.get());
+    }
+
+    private static void syncDurabilityIfChanged(ServerPlayer player, ItemStack stack) {
+        int currentDamage = stack.getDamageValue();
+        Integer previousDamage = LAST_SYNCED_DAMAGE.put(player, currentDamage);
+
+        if (previousDamage == null || previousDamage == currentDamage) {
+            return;
+        }
+
+        int slot = AccessoryHelper.getSlot(stack);
+        if (slot < 0) {
+            return;
+        }
+
+        // Mark the accessory slot dirty for Ohmega's normal bookkeeping...
+        AccessoryHelper.getContainer(player).onContentsChanged(slot);
+
+        // ...and send the changed stack immediately to the owner so the HUD
+        // durability bar reacts to Mending/repairs without opening Ohmega.
+        AccessoryHelper.syncSlots(
+                player,
+                new int[]{slot},
+                List.of(stack.copy()),
+                List.of(player)
+        );
     }
 
     private static void updateGlidingAttribute(Player player, ItemStack stack) {
