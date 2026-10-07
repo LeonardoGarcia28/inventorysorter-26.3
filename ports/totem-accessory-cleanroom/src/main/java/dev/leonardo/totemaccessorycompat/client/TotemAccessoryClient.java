@@ -1,6 +1,7 @@
 package dev.leonardo.totemaccessorycompat.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import com.swacky.ohmega.api.AccessoryHelper;
 import dev.leonardo.totemaccessorycompat.TotemAccessoryCompat;
 import dev.leonardo.totemaccessorycompat.config.TotemAccessoryClientConfig;
@@ -132,6 +133,11 @@ public final class TotemAccessoryClient {
                     TotemAccessoryClientConfig.AMULET_Y.get().floatValue(),
                     (float) z
             );
+
+            // Minecraft's living-entity render space is vertically inverted for item models.
+            // Rotate the Totem in its own plane so it appears upright without changing
+            // its attachment to the animated torso.
+            poseStack.rotateDegrees(Axis.ZP, 180.0F);
 
             float scale = TotemAccessoryClientConfig.AMULET_SCALE.get().floatValue();
             poseStack.scale(scale, scale, scale);
