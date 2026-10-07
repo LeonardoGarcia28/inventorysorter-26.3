@@ -4,8 +4,7 @@
   "package": "dev.leonardo.totemaccessorycompat.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
-    "AccessoryHelperTypeMixin",
-    "AccessoryHelperSlotTypesMixin"
+    "AccessoryHelperTypeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
