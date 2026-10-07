@@ -115,21 +115,23 @@ public class ArcheryThingsClient {
             }
         }
 
+        boolean hasElytra = false;
         boolean hasTotem = false;
+
         for (ItemStack accessory : AccessoryHelper.getAccessoryStacks(player)) {
-            if (accessory.is(Items.TOTEM_OF_UNDYING)) {
+            if (accessory.is(Items.ELYTRA)) {
+                hasElytra = true;
+            } else if (accessory.is(Items.TOTEM_OF_UNDYING)) {
                 hasTotem = true;
-                break;
             }
         }
 
         int screenCenter = graphics.guiWidth() / 2;
 
-        // Accessory HUD slots form a compact strip just like vanilla hotbar slots:
-        // item centers advance by 20 px instead of placing separate 29 px offhand
-        // frames side-by-side. The 9 px frame overlap removes the visual gap.
-        final int accessorySlotStep = 20;
-        int slotX = screenCenter + 91 + (hasTotem ? accessorySlotStep : 0);
+        // HUD order: Elytra -> Totem -> Quiver.
+        // Restore the original separated accessory slots: 29 px per preceding slot.
+        int precedingSlots = (hasElytra ? 1 : 0) + (hasTotem ? 1 : 0);
+        int slotX = screenCenter + 91 + precedingSlots * 29;
         int slotY = graphics.guiHeight() - 23;
 
         graphics.blitSprite(
