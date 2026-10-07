@@ -109,7 +109,10 @@ public class ArcheryThings {
         // While the Ohmega Quiver is equipped, arrows never fall through into
         // the vanilla inventory. They fill the Quiver first; if full, they stay
         // on the ground.
-        ArrowHandler.insertIntoQuiver(quiver, groundStack);
+        boolean inserted = ArrowHandler.insertIntoQuiver(quiver, groundStack);
+        if (inserted) {
+            Services.QUIVER.syncQuiver(event.getPlayer(), quiver);
+        }
         event.setCanPickup(TriState.FALSE);
 
         if (groundStack.isEmpty()) {
