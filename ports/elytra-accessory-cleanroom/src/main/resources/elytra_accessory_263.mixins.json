@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.leonardo.elytraaccessorycompat.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "OhmegaConfigTypeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
