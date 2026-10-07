@@ -38,7 +38,7 @@ public final class TotemAccessoryCompat {
     private static void overrideAccessoryType(AccessoryOverrideTypesEvent event) {
         event.overrideRemaps.put(
                 Items.TOTEM_OF_UNDYING,
-                AccessoryTypeManager.get(TOTEM_TYPE_ID)
+                com.swacky.ohmega.common.accessorytype.AccessoryType.UTILITY.get()
         );
     }
 
