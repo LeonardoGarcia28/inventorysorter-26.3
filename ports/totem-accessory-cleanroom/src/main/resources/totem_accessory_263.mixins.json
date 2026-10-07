@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.leonardo.totemaccessorycompat.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "OhmegaSlotTypesMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
