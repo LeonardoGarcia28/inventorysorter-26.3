@@ -1,0 +1,42 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="totem_accessory_263"
+version="${version}"
+displayName="Totem Accessory 26.3 Compat"
+authors="LeonardoGarcia28 / ChatGPT clean-room implementation"
+description='''Clean-room compatibility mod for Minecraft 26.3.
+Adds a dedicated Ohmega Totem slot and makes Totems of Undying work from it.'''
+
+[[mixins]]
+config="totem_accessory_263.mixins.json"
+
+[[dependencies.totem_accessory_263]]
+modId="neoforge"
+type="required"
+versionRange="[26.3.0.48-beta,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.totem_accessory_263]]
+modId="minecraft"
+type="required"
+versionRange="[26.3]"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.totem_accessory_263]]
+modId="ohmega"
+type="required"
+versionRange="[1.5.21,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.totem_accessory_263]]
+modId="elytra_accessory_263"
+type="required"
+versionRange="[1.0.2,)"
+ordering="AFTER"
+side="BOTH"
