@@ -1,6 +1,9 @@
 package com.coolerpromc.archerythings.platform;
 
 import com.coolerpromc.archerythings.compat.OhmegaHelper;
+import com.coolerpromc.archerythings.component.ModDataComponents;
+import com.coolerpromc.archerythings.component.data.QuiverData;
+import com.coolerpromc.archerythings.network.packet.ClientBoundQuiverSyncPacket;
 import com.coolerpromc.archerythings.platform.services.IQuiverHelper;
 import com.swacky.ohmega.api.AccessoryHelper;
 import net.minecraft.server.level.ServerPlayer;
@@ -52,5 +55,13 @@ public class NeoForgeQuiverHelper implements IQuiverHelper {
                 new int[]{slot},
                 List.of(quiver),
                 serverPlayer.level().getPlayers(other -> true));
+
+        // Do not wait for Ohmega's accessory sync cycle before updating Archery
+        // Things client state. Send the Quiver's own data component immediately.
+        QuiverData data = quiver.getOrDefault(ModDataComponents.QUIVER_DATA.get(), QuiverData.EMPTY);
+        int selected = quiver.getOrDefault(ModDataComponents.SELECTED.get(), 0);
+        Services.NETWORK.sendToPlayer(
+                serverPlayer,
+                new ClientBoundQuiverSyncPacket(data, selected));
     }
 }
