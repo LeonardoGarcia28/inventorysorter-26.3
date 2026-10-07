@@ -154,6 +154,44 @@ side = "BOTH"
 p.write_text(s)
 PY
 
+
+# NeoForge 26.3.0.48 removed the old IItemHandler API used by Archery Things'
+# optional Curios bridge. This Ohmega build does not need Curios, so drop only
+# that optional integration while keeping Trinkets + Ohmega support.
+p = root / "neoforge/build.gradle"
+s = p.read_text()
+s = s.replace('    compileOnly "top.theillusivec4.curios:curios-neoforge:16.0.0+26.2:api"\n', '')
+p.write_text(s)
+
+curios = root / "neoforge/src/main/java/com/coolerpromc/archerythings/compat/CuriosHelper.java"
+if curios.exists():
+    curios.unlink()
+
+p = root / "neoforge/src/main/java/com/coolerpromc/archerythings/platform/NeoForgeQuiverHelper.java"
+s = p.read_text()
+s = s.replace("import com.coolerpromc.archerythings.compat.CuriosHelper;\n", "")
+s = s.replace(
+"""        return (Services.PLATFORM.isModLoaded("ohmega") && OhmegaHelper.isQuiverEquipped(player))
+                || (Services.PLATFORM.isModLoaded("curios") && CuriosHelper.isQuiverEquipped(player))
+                || isQuiverEquippedCommon(player);""",
+"""        return (Services.PLATFORM.isModLoaded("ohmega") && OhmegaHelper.isQuiverEquipped(player))
+                || isQuiverEquippedCommon(player);"""
+)
+s = s.replace(
+"""        if (Services.PLATFORM.isModLoaded("ohmega") && OhmegaHelper.isQuiverEquipped(player)) {
+            return OhmegaHelper.getQuiver(player);
+        }
+        if (isQuiverEquippedCommon(player)) return getQuiverCommon(player);
+        if (Services.PLATFORM.isModLoaded("curios")) return CuriosHelper.getQuiver(player);
+        return ItemStack.EMPTY;""",
+"""        if (Services.PLATFORM.isModLoaded("ohmega") && OhmegaHelper.isQuiverEquipped(player)) {
+            return OhmegaHelper.getQuiver(player);
+        }
+        if (isQuiverEquippedCommon(player)) return getQuiverCommon(player);
+        return ItemStack.EMPTY;"""
+)
+p.write_text(s)
+
 cd work/archerythings
 gradle :neoforge:clean :neoforge:build --stacktrace
 cd ../..
