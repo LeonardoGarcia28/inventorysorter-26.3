@@ -3,6 +3,7 @@ package dev.leonardo.totemaccessorycompat.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.swacky.ohmega.api.AccessoryHelper;
 import dev.leonardo.totemaccessorycompat.TotemAccessoryCompat;
+import dev.leonardo.totemaccessorycompat.config.TotemAccessoryClientConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -25,8 +26,8 @@ public final class TotemAccessoryClient {
     private static final Identifier HUD_LAYER =
             Identifier.fromNamespaceAndPath(TotemAccessoryCompat.MOD_ID, "equipped_totem");
 
-    private static final Identifier HOTBAR_OFFHAND_LEFT =
-            Identifier.withDefaultNamespace("hud/hotbar_offhand_left");
+    private static final Identifier HOTBAR_OFFHAND_RIGHT =
+            Identifier.withDefaultNamespace("hud/hotbar_offhand_right");
 
     private TotemAccessoryClient() {}
 
@@ -50,13 +51,13 @@ public final class TotemAccessoryClient {
         int screenCenter = graphics.guiWidth() / 2;
         int y = graphics.guiHeight() - 23;
 
-        // Vanilla offhand background is 29x24. Place our visual accessory slot
-        // directly to the left of where the left/offhand slot appears.
-        int slotX = screenCenter - 91 - 29 - 29;
-        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_OFFHAND_LEFT, slotX, y, 29, 24);
+        // Mirror the exact vanilla right-side offhand spacing:
+        // hotbar ends at screenCenter + 91, then the 29x24 accessory frame starts.
+        int slotX = screenCenter + 91;
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_OFFHAND_RIGHT, slotX, y, 29, 24);
 
-        // Match vanilla's +3px inset for the item inside an offhand slot.
-        graphics.item(player, totem, slotX + 3, graphics.guiHeight() - 19, 77);
+        // Vanilla right offhand item inset is +10px from the frame's left edge.
+        graphics.item(player, totem, slotX + 10, graphics.guiHeight() - 19, 77);
     }
 
     @SubscribeEvent
@@ -80,16 +81,22 @@ public final class TotemAccessoryClient {
         PoseStack poseStack = event.getPoseStack();
         poseStack.pushPose();
 
-        // Anchor the amulet to the animated torso itself. This makes it inherit
-        // body yaw/pitch/crouch/swim/fall-flying transforms instead of remaining
-        // in camera/world-relative space.
+        // Move from the player render origin (feet) to the upper torso first.
+        poseStack.translate(0.0F, 1.38F, 0.0F);
+
+        // Inherit the animated torso transform so the amulet remains attached
+        // to the body rather than floating in camera/world space.
         event.getRenderer().getModel().body.translateAndRotate(poseStack);
 
-        // Upper chest / base of the neck, slightly in front of the body surface.
-        // ModelPart transforms use 1/16-block units; these offsets are already
-        // expressed in world/model space after body.translateAndRotate().
-        poseStack.translate(0.0F, 0.13F, -0.155F);
-        poseStack.scale(0.20F, 0.20F, 0.20F);
+        // User-adjustable local offsets around the upper chest anchor.
+        poseStack.translate(
+                TotemAccessoryClientConfig.AMULET_X.get().floatValue(),
+                TotemAccessoryClientConfig.AMULET_Y.get().floatValue(),
+                TotemAccessoryClientConfig.AMULET_Z.get().floatValue()
+        );
+
+        float scale = TotemAccessoryClientConfig.AMULET_SCALE.get().floatValue();
+        poseStack.scale(scale, scale, scale);
 
         ItemStackRenderState renderState = new ItemStackRenderState();
         minecraft.getItemModelResolver().updateForTopItem(
