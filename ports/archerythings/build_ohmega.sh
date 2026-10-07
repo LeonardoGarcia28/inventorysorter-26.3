@@ -152,9 +152,6 @@ ordering = "AFTER"
 side = "BOTH"
 '''
 p.write_text(s)
-PY
-
-
 # NeoForge 26.3.0.48 removed the old IItemHandler API used by Archery Things'
 # optional Curios bridge. This Ohmega build does not need Curios, so drop only
 # that optional integration while keeping Trinkets + Ohmega support.
@@ -191,6 +188,9 @@ s = s.replace(
         return ItemStack.EMPTY;"""
 )
 p.write_text(s)
+
+PY
+
 
 cd work/archerythings
 gradle :neoforge:clean :neoforge:build --stacktrace
