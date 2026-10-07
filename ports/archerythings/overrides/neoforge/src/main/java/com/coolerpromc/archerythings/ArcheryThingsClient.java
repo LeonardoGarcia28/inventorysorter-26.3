@@ -124,7 +124,12 @@ public class ArcheryThingsClient {
         }
 
         int screenCenter = graphics.guiWidth() / 2;
-        int slotX = screenCenter + 91 + (hasTotem ? 29 : 0);
+
+        // Accessory HUD slots form a compact strip just like vanilla hotbar slots:
+        // item centers advance by 20 px instead of placing separate 29 px offhand
+        // frames side-by-side. The 9 px frame overlap removes the visual gap.
+        final int accessorySlotStep = 20;
+        int slotX = screenCenter + 91 + (hasTotem ? accessorySlotStep : 0);
         int slotY = graphics.guiHeight() - 23;
 
         graphics.blitSprite(
