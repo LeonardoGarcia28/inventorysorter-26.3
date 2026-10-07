@@ -2,8 +2,12 @@ package com.coolerpromc.archerythings.platform;
 
 import com.coolerpromc.archerythings.compat.OhmegaHelper;
 import com.coolerpromc.archerythings.platform.services.IQuiverHelper;
+import com.swacky.ohmega.api.AccessoryHelper;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.List;
 
 public class NeoForgeQuiverHelper implements IQuiverHelper {
     @Override
@@ -26,5 +30,27 @@ public class NeoForgeQuiverHelper implements IQuiverHelper {
     @Override
     public boolean forcePickupToQuiver(Player player) {
         return Services.PLATFORM.isModLoaded("ohmega") && OhmegaHelper.isQuiverEquipped(player);
+    }
+
+    @Override
+    public void syncQuiver(Player player, ItemStack quiver) {
+        if (!(player instanceof ServerPlayer serverPlayer)
+                || !Services.PLATFORM.isModLoaded("ohmega")) {
+            return;
+        }
+
+        int slot = AccessoryHelper.getSlot(quiver);
+        if (slot < 0) {
+            return;
+        }
+
+        // Mark the Ohmega slot dirty for its normal tick sync and also send the
+        // updated stack immediately so HUD counters/components change this tick.
+        AccessoryHelper.getContainer(player).onContentsChanged(slot);
+        AccessoryHelper.syncSlots(
+                serverPlayer,
+                new int[]{slot},
+                List.of(quiver),
+                serverPlayer.level().getPlayers(other -> true));
     }
 }
