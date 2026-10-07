@@ -15,6 +15,12 @@ public interface IQuiverHelper {
         return false;
     }
 
+    /**
+     * Called whenever Archery Things mutates an equipped Quiver in-place.
+     * Platform integrations may use this to immediately synchronise accessory data.
+     */
+    default void syncQuiver(Player player, ItemStack quiver) {}
+
     default boolean isQuiverEquippedCommon(Player player) {
         return Services.PLATFORM.isModLoaded(TRINKETS_MODID) && TrinketsHelper.isQuiverEquipped(player);
     }
