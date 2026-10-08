@@ -414,7 +414,7 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-          from PIL import Image, ImageDraw
+          import base64
 
           p=Path("OhmegaSpyglass-26.3/gradle.properties")
           s=p.read_text()
@@ -436,17 +436,7 @@ jobs:
 
           out=Path("OhmegaSpyglass-26.3/src/main/resources/assets/ohmega_spyglass/textures/entity/spyglass_3d.png")
           out.parent.mkdir(parents=True, exist_ok=True)
-          img=Image.new("RGBA",(32,32),(153,96,39,255))
-          d=ImageDraw.Draw(img)
-          d.rectangle([0,0,11,31], fill=(184,115,51,255))
-          d.rectangle([12,0,31,11], fill=(205,145,64,255))
-          d.rectangle([12,12,31,23], fill=(96,62,39,255))
-          d.rectangle([12,24,31,31], fill=(142,82,36,255))
-          for x in range(0,32,4):
-              d.line([(x,0),(x,31)], fill=(220,160,75,255))
-          for y in [7,15,23,31]:
-              d.line([(0,y),(31,y)], fill=(91,55,31,255))
-          img.save(out)
+          out.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAhElEQVR4nGO8s8D7/53LLxhgQEVXgoEQ/+PHr3A+Pz83RXwmhgEGow4YdcCAO4Ax2lz+/4A6YLQcGPEOYCFH0+S1z+HsmiQVivgDHgID7oChWQ60zLsD59ckqVDEH/AoGHXAqAMG3AFDsxzYtOkmnO/np04Rf8CjYNQBow4YcAcMeDkAAAACfsc2pea9AAAAAElFTkSuQmCC"))
           PY
 
       - name: Build
