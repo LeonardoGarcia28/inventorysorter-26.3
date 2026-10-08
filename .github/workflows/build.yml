@@ -1,4 +1,4 @@
-name: Build Ohmega Spyglass 26.3
+name: Build Ohmega Spyglass 26.3 Fix
 
 on:
   push:
@@ -25,19 +25,167 @@ jobs:
         with:
           gradle-version: '9.5.0'
 
-      - name: Unpack and patch Ohmega Spyglass source for 26.3
+      - name: Unpack source and apply slot fix
+        shell: bash
         run: |
+          rm -rf OhmegaSpyglass-26.3
           unzip -q chatgpt-ohmega-spyglass-source.zip
-          sed -i 's/mc\.screen == null/mc.gui.screen() == null/' OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/ClientEvents.java
-          test -f OhmegaSpyglass-26.3/build.gradle
+
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/OhmegaSpyglass.java <<'EOF'
+          package com.ohmegaspyglass;
+
+          import com.ohmegaspyglass.client.ClientBootstrap;
+          import com.swacky.ohmega.api.AccessoryHelper;
+          import com.swacky.ohmega.api.IAccessory;
+          import net.minecraft.world.item.Items;
+          import net.neoforged.api.distmarker.Dist;
+          import net.neoforged.bus.api.IEventBus;
+          import net.neoforged.fml.ModContainer;
+          import net.neoforged.fml.common.Mod;
+
+          @Mod(OhmegaSpyglass.MODID)
+          public final class OhmegaSpyglass {
+              public static final String MODID = "ohmega_spyglass";
+
+              private static final IAccessory SPYGLASS_ACCESSORY = new IAccessory() {};
+
+              public OhmegaSpyglass(IEventBus modBus, Dist dist, ModContainer container) {
+                  if (!AccessoryHelper.isItemAccessoryBound(Items.SPYGLASS)) {
+                      AccessoryHelper.bindAccessory(Items.SPYGLASS, SPYGLASS_ACCESSORY);
+                  }
+
+                  if (dist.isClient()) {
+                      ClientBootstrap.bootstrap(modBus, container);
+                  }
+              }
+          }
+          EOF
+
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/mixin/AccessoryHelperMixin.java <<'EOF'
+          package com.ohmegaspyglass.mixin;
+
+          import com.google.common.collect.ImmutableList;
+          import com.swacky.ohmega.api.AccessoryHelper;
+          import com.swacky.ohmega.common.accessorytype.AccessoryType;
+          import net.minecraft.world.item.Item;
+          import net.minecraft.world.item.Items;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+          @Mixin(value = AccessoryHelper.class, remap = false)
+          public abstract class AccessoryHelperMixin {
+              @Inject(method = "getType", at = @At("HEAD"), cancellable = true, remap = false)
+              private static void ohmegaSpyglass$forceSpyglassNormal(Item item, CallbackInfoReturnable<AccessoryType> cir) {
+                  if (item == Items.SPYGLASS) {
+                      cir.setReturnValue(AccessoryType.NORMAL.get());
+                  }
+              }
+
+              @Inject(method = "getSlotTypes", at = @At("RETURN"), cancellable = true, remap = false)
+              private static void ohmegaSpyglass$appendNormalSlot(CallbackInfoReturnable<ImmutableList<AccessoryType>> cir) {
+                  ImmutableList<AccessoryType> original = cir.getReturnValue();
+                  ImmutableList.Builder<AccessoryType> builder = ImmutableList.builderWithExpectedSize(original.size() + 1);
+                  builder.addAll(original);
+                  builder.add(AccessoryType.NORMAL.get());
+                  cir.setReturnValue(builder.build());
+              }
+          }
+          EOF
+
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/SpyglassSlot.java <<'EOF'
+          package com.ohmegaspyglass;
+
+          import com.swacky.ohmega.api.AccessoryHelper;
+          import com.swacky.ohmega.common.dataattachment.AccessoryContainer;
+          import net.minecraft.world.entity.player.Player;
+          import net.minecraft.world.item.ItemStack;
+          import net.minecraft.world.item.Items;
+
+          public final class SpyglassSlot {
+              private SpyglassSlot() {}
+
+              public static ItemStack getEquipped(Player player) {
+                  AccessoryContainer container = AccessoryHelper.getContainer(player);
+
+                  for (int i = 0; i < container.getSlots(); i++) {
+                      ItemStack stack = container.getStackInSlot(i);
+                      if (stack.is(Items.SPYGLASS)) {
+                          return stack;
+                      }
+                  }
+
+                  return ItemStack.EMPTY;
+              }
+
+              public static boolean isEquipped(Player player) {
+                  return !getEquipped(player).isEmpty();
+              }
+          }
+          EOF
+
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/mixin/AccessoryInventoryMenuMixin.java <<'EOF'
+          package com.ohmegaspyglass.mixin;
+
+          import com.swacky.ohmega.api.AccessoryHelper;
+          import com.swacky.ohmega.common.inv.AccessoryInventoryMenu;
+          import com.swacky.ohmega.config.OhmegaConfig;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Constant;
+          import org.spongepowered.asm.mixin.injection.ModifyConstant;
+          import org.spongepowered.asm.mixin.injection.Redirect;
+
+          @Mixin(value = AccessoryInventoryMenu.class, remap = false)
+          public abstract class AccessoryInventoryMenuMixin {
+              @Redirect(
+                      method = "<init>",
+                      at = @At(
+                              value = "INVOKE",
+                              target = "Lcom/swacky/ohmega/config/OhmegaConfig$Client;maxColumns()I",
+                              remap = false),
+                      remap = false)
+              private int ohmegaSpyglass$allowSecondColumn() {
+                  return Math.max(2, OhmegaConfig.Client.maxColumns());
+              }
+
+              @ModifyConstant(method = "quickMoveStack", constant = @Constant(intValue = 52), remap = false)
+              private int ohmegaSpyglass$expandAccessoryShiftClickRange(int original) {
+                  return 46 + AccessoryHelper.getSlotTypes().size();
+              }
+          }
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/ClientEvents.java")
+          s = p.read_text()
+          s = s.replace("mc.screen == null", "mc.gui.screen() == null")
+          p.write_text(s)
+
+          p = Path("OhmegaSpyglass-26.3/gradle.properties")
+          s = p.read_text()
+          s = s.replace("mod_version=1.0.0+mc26.3", "mod_version=1.0.1+mc26.3")
+          s = s.replace(
+              "Adds a dedicated Ohmega spyglass slot, OptiFine-style zoom key, and a configurable 3D spyglass on the left leg.",
+              "Makes the vanilla spyglass a Normal Ohmega accessory, adds an extra Normal slot to the right, OptiFine-style zoom, and configurable left-leg rendering."
+          )
+          p.write_text(s)
+          PY
 
       - name: Build
         run: gradle -p OhmegaSpyglass-26.3 build --stacktrace
 
+      - name: Inspect JAR
+        run: |
+          ls -lh OhmegaSpyglass-26.3/build/libs/
+          jar tf OhmegaSpyglass-26.3/build/libs/*.jar | grep -E 'OhmegaSpyglass.class|AccessoryHelperMixin.class|AccessoryInventoryMenuMixin.class|SpyglassSlot.class'
+
       - name: Upload mod JAR
-        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ohmega-spyglass-26.3
+          name: ohmega-spyglass-1.0.1-mc26.3
           path: OhmegaSpyglass-26.3/build/libs/*.jar
           if-no-files-found: error
