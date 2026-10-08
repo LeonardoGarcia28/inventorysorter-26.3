@@ -1,4 +1,4 @@
-name: Build Ohmega Spyglass 26.3 Fix
+name: Build Ohmega Spyglass 1.0.2 MC 26.3
 
 on:
   push:
@@ -25,46 +25,18 @@ jobs:
         with:
           gradle-version: '9.5.0'
 
-      - name: Unpack source and apply slot fix
+      - name: Unpack source and apply 1.0.2 changes
         shell: bash
         run: |
           rm -rf OhmegaSpyglass-26.3
           unzip -q chatgpt-ohmega-spyglass-source.zip
 
-          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/OhmegaSpyglass.java <<'EOF'
-          package com.ohmegaspyglass;
-
-          import com.ohmegaspyglass.client.ClientBootstrap;
-          import com.swacky.ohmega.api.AccessoryHelper;
-          import com.swacky.ohmega.api.IAccessory;
-          import net.minecraft.world.item.Items;
-          import net.neoforged.api.distmarker.Dist;
-          import net.neoforged.bus.api.IEventBus;
-          import net.neoforged.fml.ModContainer;
-          import net.neoforged.fml.common.Mod;
-
-          @Mod(OhmegaSpyglass.MODID)
-          public final class OhmegaSpyglass {
-              public static final String MODID = "ohmega_spyglass";
-
-              private static final IAccessory SPYGLASS_ACCESSORY = new IAccessory() {};
-
-              public OhmegaSpyglass(IEventBus modBus, Dist dist, ModContainer container) {
-                  if (!AccessoryHelper.isItemAccessoryBound(Items.SPYGLASS)) {
-                      AccessoryHelper.bindAccessory(Items.SPYGLASS, SPYGLASS_ACCESSORY);
-                  }
-
-                  if (dist.isClient()) {
-                      ClientBootstrap.bootstrap(modBus, container);
-                  }
-              }
-          }
-          EOF
+          rm -f OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/mixin/AccessoryInventoryMenuMixin.java
+          mkdir -p OhmegaSpyglass-26.3/src/main/resources/assets/ohmega_spyglass/textures/entity
 
           cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/mixin/AccessoryHelperMixin.java <<'EOF'
           package com.ohmegaspyglass.mixin;
 
-          import com.google.common.collect.ImmutableList;
           import com.swacky.ohmega.api.AccessoryHelper;
           import com.swacky.ohmega.common.accessorytype.AccessoryType;
           import net.minecraft.world.item.Item;
@@ -82,97 +54,399 @@ jobs:
                       cir.setReturnValue(AccessoryType.NORMAL.get());
                   }
               }
+          }
+          EOF
 
-              @Inject(method = "getSlotTypes", at = @At("RETURN"), cancellable = true, remap = false)
-              private static void ohmegaSpyglass$appendNormalSlot(CallbackInfoReturnable<ImmutableList<AccessoryType>> cir) {
-                  ImmutableList<AccessoryType> original = cir.getReturnValue();
-                  ImmutableList.Builder<AccessoryType> builder = ImmutableList.builderWithExpectedSize(original.size() + 1);
-                  builder.addAll(original);
-                  builder.add(AccessoryType.NORMAL.get());
-                  cir.setReturnValue(builder.build());
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/ClientEvents.java <<'EOF'
+          package com.ohmegaspyglass.client;
+
+          import com.mojang.blaze3d.platform.InputConstants;
+          import com.ohmegaspyglass.OhmegaSpyglass;
+          import com.ohmegaspyglass.SpyglassSlot;
+          import com.swacky.ohmega.common.init.OhmegaBinds;
+          import net.minecraft.client.KeyMapping;
+          import net.minecraft.client.Minecraft;
+          import net.minecraft.resources.Identifier;
+          import net.minecraft.sounds.SoundEvents;
+          import net.minecraft.world.entity.player.Player;
+          import net.minecraft.world.entity.player.PlayerModelType;
+          import net.neoforged.neoforge.client.event.ClientTickEvent;
+          import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+          import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
+          import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+          import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
+
+          public final class ClientEvents {
+              public static final KeyMapping ZOOM = new KeyMapping(
+                      "key.ohmega_spyglass.zoom",
+                      InputConstants.Type.KEYBOARD,
+                      InputConstants.KEY_C,
+                      OhmegaBinds.CATEGORY);
+
+              private static final Identifier HUD_LAYER = Identifier.parse(OhmegaSpyglass.MODID + ":spyglass_hud");
+              private static boolean virtualScoping;
+
+              private ClientEvents() {}
+
+              public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
+                  event.register(ZOOM);
+              }
+
+              public static void onRegisterLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
+                  event.registerLayerDefinition(SpyglassModel.LAYER, SpyglassModel::createLayer);
+              }
+
+              public static void onAddLayers(EntityRenderersEvent.AddLayers event) {
+                  for (PlayerModelType skinType : event.getSkins()) {
+                      var renderer = event.getPlayerRenderer(skinType);
+                      if (renderer != null) {
+                          renderer.addLayer(new SpyglassLayer<>(renderer, event.getEntityModels()));
+                      }
+                  }
+              }
+
+              public static void onRegisterGuiLayers(RegisterGuiLayersEvent event) {
+                  event.registerAbove(VanillaGuiLayers.HOTBAR, HUD_LAYER, SpyglassHud::render);
+              }
+
+              public static void onClientTick(ClientTickEvent.Post event) {
+                  Minecraft mc = Minecraft.getInstance();
+                  boolean next = mc.player != null
+                          && mc.level != null
+                          && mc.gui.screen() == null
+                          && ZOOM.isDown()
+                          && SpyglassSlot.isEquipped(mc.player);
+
+                  if (next != virtualScoping && mc.player != null) {
+                      mc.player.playSound(next ? SoundEvents.SPYGLASS_USE : SoundEvents.SPYGLASS_STOP_USING, 1.0F, 1.0F);
+                  }
+
+                  virtualScoping = next;
+              }
+
+              public static boolean isVirtualScoping(Player player) {
+                  Minecraft mc = Minecraft.getInstance();
+                  return virtualScoping && player == mc.player && SpyglassSlot.isEquipped(player);
               }
           }
           EOF
 
-          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/SpyglassSlot.java <<'EOF'
-          package com.ohmegaspyglass;
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/ClientBootstrap.java <<'EOF'
+          package com.ohmegaspyglass.client;
 
+          import com.ohmegaspyglass.config.ClientConfig;
+          import net.neoforged.bus.api.IEventBus;
+          import net.neoforged.fml.ModContainer;
+          import net.neoforged.fml.config.ModConfig;
+          import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+          import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+          import net.neoforged.neoforge.common.NeoForge;
+
+          public final class ClientBootstrap {
+              private ClientBootstrap() {}
+
+              public static void bootstrap(IEventBus modBus, ModContainer container) {
+                  container.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
+                  container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+
+                  modBus.addListener(ClientEvents::onRegisterKeyMappings);
+                  modBus.addListener(ClientEvents::onRegisterLayerDefinitions);
+                  modBus.addListener(ClientEvents::onAddLayers);
+                  modBus.addListener(ClientEvents::onRegisterGuiLayers);
+
+                  NeoForge.EVENT_BUS.addListener(ClientEvents::onClientTick);
+              }
+          }
+          EOF
+
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/SpyglassHud.java <<'EOF'
+          package com.ohmegaspyglass.client;
+
+          import com.ohmegaspyglass.SpyglassSlot;
           import com.swacky.ohmega.api.AccessoryHelper;
           import com.swacky.ohmega.common.dataattachment.AccessoryContainer;
+          import net.minecraft.client.DeltaTracker;
+          import net.minecraft.client.Minecraft;
+          import net.minecraft.client.gui.GuiGraphicsExtractor;
+          import net.minecraft.client.renderer.RenderPipelines;
+          import net.minecraft.core.registries.BuiltInRegistries;
+          import net.minecraft.resources.Identifier;
+          import net.minecraft.world.entity.HumanoidArm;
           import net.minecraft.world.entity.player.Player;
           import net.minecraft.world.item.ItemStack;
           import net.minecraft.world.item.Items;
 
-          public final class SpyglassSlot {
-              private SpyglassSlot() {}
+          public final class SpyglassHud {
+              private static final Identifier HOTBAR_OFFHAND_RIGHT = Identifier.withDefaultNamespace("hud/hotbar_offhand_right");
+              private static final int OFFHAND_SLOT_WIDTH = 29;
 
-              public static ItemStack getEquipped(Player player) {
+              private SpyglassHud() {}
+
+              public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
+                  Minecraft mc = Minecraft.getInstance();
+                  Player player = mc.player;
+                  if (player == null || mc.gameMode == null) {
+                      return;
+                  }
+
+                  ItemStack spyglass = SpyglassSlot.getEquipped(player);
+                  if (spyglass.isEmpty()) {
+                      return;
+                  }
+
+                  int reserved = countRightSideAccessoryHudSlots(player);
+                  if (!player.getOffhandItem().isEmpty() && player.getMainArm().getOpposite() == HumanoidArm.RIGHT) {
+                      reserved++;
+                  }
+
+                  int screenCenter = graphics.guiWidth() / 2;
+                  int backgroundX = screenCenter + 91 + reserved * OFFHAND_SLOT_WIDTH;
+                  int backgroundY = graphics.guiHeight() - 23;
+                  int itemX = backgroundX + 10;
+                  int itemY = graphics.guiHeight() - 19;
+
+                  graphics.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_OFFHAND_RIGHT, backgroundX, backgroundY, 29, 24);
+                  graphics.item(player, spyglass, itemX, itemY, 100 + reserved);
+                  graphics.itemDecorations(mc.font, spyglass, itemX, itemY);
+              }
+
+              private static int countRightSideAccessoryHudSlots(Player player) {
                   AccessoryContainer container = AccessoryHelper.getContainer(player);
+                  int result = 0;
 
                   for (int i = 0; i < container.getSlots(); i++) {
                       ItemStack stack = container.getStackInSlot(i);
-                      if (stack.is(Items.SPYGLASS)) {
-                          return stack;
+                      if (stack.isEmpty() || stack.is(Items.SPYGLASS)) {
+                          continue;
+                      }
+
+                      if (stack.is(Items.ELYTRA) || stack.is(Items.TOTEM_OF_UNDYING)) {
+                          result++;
+                          continue;
+                      }
+
+                      Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+                      String path = id.getPath();
+                      if (path.contains("quiver") || path.contains("elytra") || path.contains("totem")) {
+                          result++;
                       }
                   }
 
-                  return ItemStack.EMPTY;
-              }
-
-              public static boolean isEquipped(Player player) {
-                  return !getEquipped(player).isEmpty();
+                  return result;
               }
           }
           EOF
 
-          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/mixin/AccessoryInventoryMenuMixin.java <<'EOF'
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/SpyglassModel.java <<'EOF'
+          package com.ohmegaspyglass.client;
+
+          import com.ohmegaspyglass.OhmegaSpyglass;
+          import net.minecraft.client.model.Model;
+          import net.minecraft.client.model.geom.ModelLayerLocation;
+          import net.minecraft.client.model.geom.ModelPart;
+          import net.minecraft.client.model.geom.PartPose;
+          import net.minecraft.client.model.geom.builders.CubeDeformation;
+          import net.minecraft.client.model.geom.builders.CubeListBuilder;
+          import net.minecraft.client.model.geom.builders.LayerDefinition;
+          import net.minecraft.client.model.geom.builders.MeshDefinition;
+          import net.minecraft.client.model.geom.builders.PartDefinition;
+          import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
+          import net.minecraft.client.renderer.rendertype.RenderType;
+          import net.minecraft.resources.Identifier;
+
+          import java.util.function.Function;
+
+          public final class SpyglassModel<S extends HumanoidRenderState> extends Model<S> {
+              public static final ModelLayerLocation LAYER = new ModelLayerLocation(
+                      Identifier.parse(OhmegaSpyglass.MODID + ":spyglass_3d"), "main");
+
+              public SpyglassModel(ModelPart root, Function<Identifier, RenderType> renderType) {
+                  super(root.getChild("spyglass"), renderType);
+              }
+
+              public static LayerDefinition createLayer() {
+                  MeshDefinition mesh = new MeshDefinition();
+                  PartDefinition root = mesh.getRoot();
+
+                  CubeListBuilder cubes = CubeListBuilder.create()
+                          .texOffs(0, 0)
+                          .addBox(-1.5F, 0.0F, -1.5F, 3.0F, 11.0F, 3.0F, new CubeDeformation(0.0F))
+                          .texOffs(12, 0)
+                          .addBox(-2.0F, 9.5F, -2.0F, 4.0F, 2.0F, 4.0F, new CubeDeformation(0.0F))
+                          .texOffs(12, 12)
+                          .addBox(-1.25F, -2.0F, -1.25F, 2.5F, 3.0F, 2.5F, new CubeDeformation(0.0F));
+
+                  root.addOrReplaceChild("spyglass", cubes, PartPose.offset(0.0F, 0.0F, 0.0F));
+                  return LayerDefinition.create(mesh, 32, 32);
+              }
+          }
+          EOF
+
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/SpyglassLayer.java <<'EOF'
+          package com.ohmegaspyglass.client;
+
+          import com.mojang.blaze3d.vertex.PoseStack;
+          import com.mojang.math.Axis;
+          import com.ohmegaspyglass.OhmegaSpyglass;
+          import com.ohmegaspyglass.config.ClientConfig;
+          import net.minecraft.client.model.HumanoidModel;
+          import net.minecraft.client.model.geom.EntityModelSet;
+          import net.minecraft.client.renderer.SubmitNodeCollector;
+          import net.minecraft.client.renderer.entity.RenderLayerParent;
+          import net.minecraft.client.renderer.entity.layers.RenderLayer;
+          import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
+          import net.minecraft.client.renderer.rendertype.RenderTypes;
+          import net.minecraft.client.renderer.texture.OverlayTexture;
+          import net.minecraft.resources.Identifier;
+          import net.minecraft.world.item.ItemStack;
+
+          public final class SpyglassLayer<S extends HumanoidRenderState, M extends HumanoidModel<S>> extends RenderLayer<S, M> {
+              private static final Identifier TEXTURE = Identifier.parse(OhmegaSpyglass.MODID + ":textures/entity/spyglass_3d.png");
+              private final SpyglassModel<S> model;
+
+              public SpyglassLayer(RenderLayerParent<S, M> renderer, EntityModelSet modelSet) {
+                  super(renderer);
+                  this.model = new SpyglassModel<>(modelSet.bakeLayer(SpyglassModel.LAYER), RenderTypes::entityCutout);
+              }
+
+              @Override
+              public void submit(PoseStack poseStack, SubmitNodeCollector nodeCollector, int packedLight,
+                                 S renderState, float yRot, float partialTick) {
+                  if (renderState.isInvisible || !(renderState instanceof SpyglassRenderState stateAccess)) {
+                      return;
+                  }
+
+                  ItemStack spyglass = stateAccess.ohmegaSpyglass$getStack();
+                  if (spyglass == null || spyglass.isEmpty()) {
+                      return;
+                  }
+
+                  poseStack.pushPose();
+                  getParentModel().leftLeg.translateAndRotate(poseStack);
+                  poseStack.translate(ClientConfig.x(), ClientConfig.y(), ClientConfig.z());
+                  poseStack.rotateDegrees(Axis.ZP, 8.0F);
+                  poseStack.rotateDegrees(Axis.XP, -5.0F);
+
+                  float scale = ClientConfig.scale();
+                  poseStack.scale(scale, scale, scale);
+
+                  nodeCollector.submitModel(
+                          this.model,
+                          renderState,
+                          poseStack,
+                          RenderTypes.entityCutout(TEXTURE),
+                          packedLight,
+                          OverlayTexture.NO_OVERLAY,
+                          -1,
+                          null,
+                          renderState.outlineColor);
+
+                  poseStack.popPose();
+              }
+          }
+          EOF
+
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/mixin/PlayerScopingMixin.java <<'EOF'
           package com.ohmegaspyglass.mixin;
 
-          import com.swacky.ohmega.api.AccessoryHelper;
-          import com.swacky.ohmega.common.inv.AccessoryInventoryMenu;
-          import com.swacky.ohmega.config.OhmegaConfig;
+          import com.ohmegaspyglass.client.ClientEvents;
+          import net.minecraft.world.entity.player.Player;
           import org.spongepowered.asm.mixin.Mixin;
           import org.spongepowered.asm.mixin.injection.At;
-          import org.spongepowered.asm.mixin.injection.Constant;
-          import org.spongepowered.asm.mixin.injection.ModifyConstant;
-          import org.spongepowered.asm.mixin.injection.Redirect;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-          @Mixin(value = AccessoryInventoryMenu.class, remap = false)
-          public abstract class AccessoryInventoryMenuMixin {
-              @Redirect(
-                      method = "<init>",
-                      at = @At(
-                              value = "INVOKE",
-                              target = "Lcom/swacky/ohmega/config/OhmegaConfig$Client;maxColumns()I",
-                              remap = false),
-                      remap = false)
-              private int ohmegaSpyglass$allowSecondColumn() {
-                  return Math.max(2, OhmegaConfig.Client.maxColumns());
+          @Mixin(Player.class)
+          public abstract class PlayerScopingMixin {
+              @Inject(method = "isScoping", at = @At("RETURN"), cancellable = true)
+              private void ohmegaSpyglass$virtualScoping(CallbackInfoReturnable<Boolean> cir) {
+                  if (!cir.getReturnValue() && ClientEvents.isVirtualScoping((Player) (Object) this)) {
+                      cir.setReturnValue(true);
+                  }
               }
+          }
+          EOF
 
-              @ModifyConstant(method = "quickMoveStack", constant = @Constant(intValue = 52), remap = false)
-              private int ohmegaSpyglass$expandAccessoryShiftClickRange(int original) {
-                  return 46 + AccessoryHelper.getSlotTypes().size();
+          cat > OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/mixin/AbstractClientPlayerMixin.java <<'EOF'
+          package com.ohmegaspyglass.mixin;
+
+          import com.ohmegaspyglass.client.ClientEvents;
+          import net.minecraft.client.player.AbstractClientPlayer;
+          import net.minecraft.world.entity.player.Player;
+          import net.minecraft.world.item.SpyglassItem;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+          @Mixin(AbstractClientPlayer.class)
+          public abstract class AbstractClientPlayerMixin {
+              @Inject(method = "getFieldOfViewModifier", at = @At("HEAD"), cancellable = true)
+              private void ohmegaSpyglass$vanillaFov(boolean firstPerson, float effectScale,
+                                                      CallbackInfoReturnable<Float> cir) {
+                  if (firstPerson && ClientEvents.isVirtualScoping((Player) (Object) this)) {
+                      cir.setReturnValue(SpyglassItem.ZOOM_FOV_MODIFIER);
+                  }
               }
+          }
+          EOF
+
+          cat > OhmegaSpyglass-26.3/src/main/resources/ohmega_spyglass.mixins.json <<'EOF'
+          {
+            "required": true,
+            "minVersion": "0.8",
+            "package": "com.ohmegaspyglass.mixin",
+            "compatibilityLevel": "JAVA_21",
+            "mixins": [
+              "AccessoryHelperMixin"
+            ],
+            "client": [
+              "AbstractClientPlayerMixin",
+              "AvatarRenderStateMixin",
+              "AvatarRendererMixin",
+              "PlayerScopingMixin"
+            ],
+            "injectors": {
+              "defaultRequire": 1
+            }
           }
           EOF
 
           python3 - <<'PY'
           from pathlib import Path
+          from PIL import Image, ImageDraw
 
-          p = Path("OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/ClientEvents.java")
-          s = p.read_text()
-          s = s.replace("mc.screen == null", "mc.gui.screen() == null")
+          p=Path("OhmegaSpyglass-26.3/gradle.properties")
+          s=p.read_text()
+          s=s.replace("mod_version=1.0.0+mc26.3","mod_version=1.0.2+mc26.3")
+          s=s.replace("mod_version=1.0.1+mc26.3","mod_version=1.0.2+mc26.3")
           p.write_text(s)
 
-          p = Path("OhmegaSpyglass-26.3/gradle.properties")
-          s = p.read_text()
-          s = s.replace("mod_version=1.0.0+mc26.3", "mod_version=1.0.1+mc26.3")
-          s = s.replace(
-              "Adds a dedicated Ohmega spyglass slot, OptiFine-style zoom key, and a configurable 3D spyglass on the left leg.",
-              "Makes the vanilla spyglass a Normal Ohmega accessory, adds an extra Normal slot to the right, OptiFine-style zoom, and configurable left-leg rendering."
-          )
+          p=Path("OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/SpyglassSlot.java")
+          s=p.read_text()
+          s=s.replace("so the player may use either an existing Normal\\n     * slot or the extra Normal slot added by this mod.",
+                      "so the player can use any existing Normal slot. This mod does not add an extra Ohmega slot.")
           p.write_text(s)
+
+          p=Path("OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/config/ClientConfig.java")
+          s=p.read_text()
+          s=s.replace("3D spyglass scale. Default 0.5 matches Archery Things' quiver item-render scale.",
+                      "Scale of the true 3D spyglass model attached to the left leg.")
+          p.write_text(s)
+
+          out=Path("OhmegaSpyglass-26.3/src/main/resources/assets/ohmega_spyglass/textures/entity/spyglass_3d.png")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          img=Image.new("RGBA",(32,32),(153,96,39,255))
+          d=ImageDraw.Draw(img)
+          d.rectangle([0,0,11,31], fill=(184,115,51,255))
+          d.rectangle([12,0,31,11], fill=(205,145,64,255))
+          d.rectangle([12,12,31,23], fill=(96,62,39,255))
+          d.rectangle([12,24,31,31], fill=(142,82,36,255))
+          for x in range(0,32,4):
+              d.line([(x,0),(x,31)], fill=(220,160,75,255))
+          for y in [7,15,23,31]:
+              d.line([(0,y),(31,y)], fill=(91,55,31,255))
+          img.save(out)
           PY
 
       - name: Build
@@ -181,11 +455,11 @@ jobs:
       - name: Inspect JAR
         run: |
           ls -lh OhmegaSpyglass-26.3/build/libs/
-          jar tf OhmegaSpyglass-26.3/build/libs/*.jar | grep -E 'OhmegaSpyglass.class|AccessoryHelperMixin.class|AccessoryInventoryMenuMixin.class|SpyglassSlot.class'
+          jar tf OhmegaSpyglass-26.3/build/libs/*.jar | grep -E 'PlayerScopingMixin.class|AbstractClientPlayerMixin.class|SpyglassHud.class|SpyglassModel.class|SpyglassLayer.class'
 
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: ohmega-spyglass-1.0.1-mc26.3
+          name: ohmega-spyglass-1.0.2-mc26.3
           path: OhmegaSpyglass-26.3/build/libs/*.jar
           if-no-files-found: error
