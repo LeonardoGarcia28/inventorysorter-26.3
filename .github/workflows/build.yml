@@ -25,9 +25,10 @@ jobs:
         with:
           gradle-version: '9.5.0'
 
-      - name: Unpack Ohmega Spyglass source
+      - name: Unpack and patch Ohmega Spyglass source for 26.3
         run: |
           unzip -q chatgpt-ohmega-spyglass-source.zip
+          sed -i 's/mc\.screen == null/mc.gui.screen() == null/' OhmegaSpyglass-26.3/src/main/java/com/ohmegaspyglass/client/ClientEvents.java
           test -f OhmegaSpyglass-26.3/build.gradle
 
       - name: Build
