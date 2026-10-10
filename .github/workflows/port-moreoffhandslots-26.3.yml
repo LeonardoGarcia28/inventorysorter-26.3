@@ -155,7 +155,7 @@ jobs:
         run: |
           cd port-build
           set -o pipefail
-          ./gradlew --no-daemon --no-configuration-cache clean collectMods --stacktrace 2>&1 | tee ../port-build.log
+          ./gradlew --no-daemon --no-configuration-cache collectMods --stacktrace 2>&1 | tee ../port-build.log
       - name: Upload jars
         if: success()
         uses: actions/upload-artifact@v4
