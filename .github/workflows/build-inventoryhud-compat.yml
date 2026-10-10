@@ -37,7 +37,7 @@ jobs:
         run: |
           set -o pipefail
           cd inventoryhud-compat-26.3
-          ./gradlew --no-daemon --no-configuration-cache clean build --stacktrace 2>&1 | tee ../inventoryhudcompat-build.log
+          ./gradlew --no-daemon --no-configuration-cache build --stacktrace 2>&1 | tee ../inventoryhudcompat-build.log
       - name: Verify mixin and mod metadata in compiled jar
         shell: bash
         run: |
