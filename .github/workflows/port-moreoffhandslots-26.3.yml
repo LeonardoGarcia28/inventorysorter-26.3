@@ -150,6 +150,38 @@ jobs:
           base64 --decode port-moreoffhandslots/migration.patch.gz.b64 | gzip -d > port-build/migration.patch
           cd port-build
           patch -p1 < migration.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('slotlib/src/main/java/net/akkynaa/slotlib')
+          changes = {
+              'client/gui/SlotLibButton.java': [
+                  ('mc.setScreen(inventory)', 'mc.gui.setScreen(inventory)'),
+                  ('.getGuiLeft()', '.getLeftPos()'),
+                  ('.getGuiTop()', '.getTopPos()'),
+              ],
+              'client/compat/CuriosCompat.java': [
+                  ('import net.minecraft.util.Tuple;\n', ''),
+                  ('Tuple<Integer, Integer> offsets', 'var offsets'),
+                  ('.getGuiLeft()', '.getLeftPos()'),
+                  ('.getGuiTop()', '.getTopPos()'),
+              ],
+              'common/event/SlotLibEventHandler.java': [
+                  ('player.level().getServer().getWorldData().getGameRules()', 'player.level().getGameRules()'),
+                  ('livingEntity.level().random', 'livingEntity.level().getRandom()'),
+              ],
+              'common/inventory/container/SlotLibContainer.java': [
+                  ('playerIn.drop(itemstack1, false)', 'playerIn.drop(itemstack1, false, net.minecraft.util.Prediction.SERVER_ONLY)'),
+              ],
+          }
+          for path, replacements in changes.items():
+              p = root / path
+              s = p.read_text()
+              for old,new in replacements:
+                  if old not in s:
+                      raise SystemExit(f'Missing source pattern: {path}: {old}')
+                  s = s.replace(old,new)
+              p.write_text(s)
+          PY
           chmod +x gradlew
       - name: Build and capture error logs
         run: |
