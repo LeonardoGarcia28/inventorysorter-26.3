@@ -1,0 +1,171 @@
+name: Port MoreOffhandSlots Minecraft 26.3
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Download both upstream source branches
+        run: |
+          curl -fL --retry 3 https://github.com/AkkynaA/slotlib/archive/refs/heads/neoforge-1.21.11.tar.gz | tar -xz
+          curl -fL --retry 3 https://github.com/AkkynaA/moreoffhandslots/archive/refs/heads/neoforge-1.21.11.tar.gz | tar -xz
+          mkdir port-build
+          mv slotlib-neoforge-1.21.11 port-build/slotlib
+          mv moreoffhandslots-neoforge-1.21.11 port-build/moreoffhandslots
+          cd port-build
+          cp slotlib/gradlew slotlib/gradlew.bat .
+          cp -r slotlib/gradle .
+          sed -i 's/gradle-[0-9.]*-bin.zip/gradle-9.2.1-bin.zip/' gradle/wrapper/gradle-wrapper.properties
+          rm -f slotlib/gradle.properties moreoffhandslots/gradle.properties
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('gradle/wrapper/gradle-wrapper.properties')
+          assert 'gradle-9.2.1-bin.zip' in p.read_text()
+          PY
+      - name: Configure multimodule project
+        run: |
+          cd port-build
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  gradlePluginPortal()
+                  maven { url = 'https://maven.neoforged.net/releases' }
+              }
+          }
+          plugins {
+              id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+          }
+          rootProject.name = 'moreoffhandslots-26.3-port'
+          include 'slotlib', 'moreoffhandslots'
+          EOF
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx3G
+          org.gradle.parallel=false
+          org.gradle.configuration-cache=false
+          minecraft_version=26.3
+          minecraft_version_range=[26.3]
+          neo_version=26.3.0.58-beta
+          neo_version_range=[26.3.0.58-beta,)
+          loader_version_range=[1,)
+          mod_version=26.3.0.1
+          curios_version=17.0.0-beta.2+26.3
+          EOF
+          cat > build.gradle <<'EOF'
+          plugins { id 'base' }
+          tasks.register('collectMods', Copy) {
+              dependsOn ':slotlib:build', ':moreoffhandslots:build'
+              from(project(':slotlib').tasks.named('jar'))
+              from(project(':moreoffhandslots').tasks.named('jar'))
+              into layout.buildDirectory.dir('distributions/mods')
+          }
+          EOF
+          cat > slotlib/build.gradle <<'EOF'
+          plugins {
+              id 'java-library'
+              id 'net.neoforged.gradle.userdev' version '7.1.39'
+          }
+          version = mod_version
+          group = 'net.akkynaa.slotlib'
+          base { archivesName = 'slotlib-neoforge' }
+          java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+          repositories {
+              maven { url = 'https://maven.theillusivec4.top/' }
+              maven { url = 'https://cursemaven.com' }
+          }
+          configurations { runtimeClasspath.extendsFrom localRuntime }
+          dependencies {
+              implementation "net.neoforged:neoforge:${neo_version}"
+              compileOnly "top.theillusivec4.curios:curios-neoforge:${curios_version}"
+          }
+          runs {
+              configureEach { modSource sourceSets.main }
+              client { }
+              server { argument '--nogui' }
+          }
+          tasks.withType(ProcessResources).configureEach {
+              def props = [minecraft_version: minecraft_version,
+                           minecraft_version_range: minecraft_version_range,
+                           neo_version: neo_version,
+                           neo_version_range: neo_version_range,
+                           loader_version_range: loader_version_range,
+                           mod_id: 'slotlib', mod_name: 'SlotLib',
+                           mod_license: 'GPL-3.0-or-later', mod_version: mod_version,
+                           mod_author: 'AkkynaA',
+                           source_url: 'https://github.com/AkkynaA/slotlib']
+              inputs.properties(props)
+              filesMatching('META-INF/neoforge.mods.toml') { expand(props) }
+          }
+          EOF
+          cat > moreoffhandslots/build.gradle <<'EOF'
+          plugins {
+              id 'java-library'
+              id 'net.neoforged.gradle.userdev' version '7.1.39'
+          }
+          version = mod_version
+          group = 'net.akkynaa.moreoffhandslots'
+          base { archivesName = 'moreoffhandslots-neoforge' }
+          java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+          repositories { maven { url = 'https://maven.theillusivec4.top/' } }
+          configurations { runtimeClasspath.extendsFrom localRuntime }
+          dependencies {
+              implementation "net.neoforged:neoforge:${neo_version}"
+              implementation project(':slotlib')
+          }
+          runs {
+              configureEach {
+                  modSource sourceSets.main
+                  modSource project(':slotlib').sourceSets.main
+              }
+              client { }
+              server { argument '--nogui' }
+          }
+          tasks.withType(ProcessResources).configureEach {
+              def props = [minecraft_version: minecraft_version,
+                           minecraft_version_range: minecraft_version_range,
+                           neo_version: neo_version, mod_id: 'moreoffhandslots',
+                           mod_name: 'More Offhand Slots', mod_license: 'LGPL-3.0-or-later',
+                           mod_version: mod_version, mod_authors: 'AkkynaA',
+                           mod_description: 'Adds additional offhand slots.']
+              inputs.properties(props)
+              filesMatching('META-INF/neoforge.mods.toml') { expand(props) }
+          }
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('moreoffhandslots/src/main/resources/META-INF/accesstransformer.cfg')
+          if p.exists(): p.unlink()
+          PY
+      - name: Apply migration patch
+        run: |
+          base64 --decode port-moreoffhandslots/migration.patch.gz.b64 | gzip -d > port-build/migration.patch
+          cd port-build
+          patch -p1 < migration.patch
+          chmod +x gradlew
+      - name: Build and capture error logs
+        run: |
+          cd port-build
+          set -o pipefail
+          ./gradlew --no-daemon --no-configuration-cache clean collectMods --stacktrace 2>&1 | tee ../port-build.log
+      - name: Upload jars
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoreOffhandSlots-SlotLib-26.3
+          path: port-build/build/distributions/mods/*.jar
+          if-no-files-found: error
+      - name: Upload failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoreOffhandSlots-build-log
+          path: port-build.log
+          if-no-files-found: ignore
