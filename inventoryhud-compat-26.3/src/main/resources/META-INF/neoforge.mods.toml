@@ -1,13 +1,11 @@
-modLoader="javafml"
-loaderVersion="[1,)"
 license="${mod_license}"
 
 [[mods]]
 modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
-authors="Community compatibility patch (unofficial)"
-description='''Prevents Inventory HUD+ 3.4.36 from crashing on NeoForge 26.3 when entering a world. This patch disables only the legacy update notification.'''
+authors="Unofficial compatibility patch"
+description='''Prevents Inventory HUD+ 3.4.36 from crashing on NeoForge 26.3 when entering a world. Only the obsolete update notification is disabled.'''
 
 [[mixins]]
 config="inventoryhudcompat.mixins.json"
