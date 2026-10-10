@@ -1,8 +1,6 @@
 name: Port MoreOffhandSlots Minecraft 26.3
 on:
   workflow_dispatch:
-  push:
-    branches: [experimental-moreoffhandslots-26.3]
 permissions:
   contents: read
 jobs:
