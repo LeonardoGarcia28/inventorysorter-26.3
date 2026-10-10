@@ -197,6 +197,8 @@ jobs:
               p.write_text(s)
           PY
           chmod +x gradlew
+      - name: Keep empty offhand slots visible
+        run: python3 port-moreoffhandslots/always_visible_offhand.py
       - name: Build and capture error logs
         run: |
           cd port-build
