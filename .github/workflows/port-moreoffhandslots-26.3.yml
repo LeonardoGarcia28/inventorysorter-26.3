@@ -162,11 +162,13 @@ jobs:
               'client/compat/CuriosCompat.java': [
                   ('import net.minecraft.util.Tuple;\n', ''),
                   ('Tuple<Integer, Integer> offsets', 'var offsets'),
+                  ('.getA()', '.getFirst()'),
+                  ('.getB()', '.getSecond()'),
                   ('.getGuiLeft()', '.getLeftPos()'),
                   ('.getGuiTop()', '.getTopPos()'),
               ],
               'common/event/SlotLibEventHandler.java': [
-                  ('player.level().getServer().getWorldData().getGameRules()', 'player.level().getGameRules()'),
+                  ('player.level().getServer().getWorldData().getGameRules()', 'player.level().getServer().getGameRules()'),
                   ('livingEntity.level().random', 'livingEntity.level().getRandom()'),
               ],
               'common/inventory/container/SlotLibContainer.java': [
