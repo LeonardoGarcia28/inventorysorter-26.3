@@ -175,6 +175,18 @@ jobs:
                   ('playerIn.drop(itemstack1, false)', 'playerIn.drop(itemstack1, false, net.minecraft.util.Prediction.SERVER_ONLY)'),
               ],
           }
+          mainroot = Path('moreoffhandslots/src/main/java/net/akkynaa/moreoffhandslots')
+          changes_main = {
+              'client/input/ScrollWheelHandler.java': [('minecraft.screen', 'minecraft.gui.screen()')],
+              'client/render/OffhandHudRenderer.java': [('mc.options.hideGui', 'mc.gui.hud.isHidden()')],
+          }
+          for path, replacements in changes_main.items():
+              p = mainroot / path
+              data = p.read_text()
+              for old, new in replacements:
+                  if old not in data: raise SystemExit(f'Missing source pattern: {path}: {old}')
+                  data = data.replace(old, new)
+              p.write_text(data)
           for path, replacements in changes.items():
               p = root / path
               s = p.read_text()
