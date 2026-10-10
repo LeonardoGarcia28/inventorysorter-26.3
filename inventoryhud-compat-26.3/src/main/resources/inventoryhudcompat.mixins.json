@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.leonardogarcia.inventoryhudcompat.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "DisableBrokenUpdateCheckMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
