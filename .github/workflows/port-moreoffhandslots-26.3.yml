@@ -125,8 +125,7 @@ jobs:
           runs {
               configureEach {
                   modSource sourceSets.main
-                  modSource project(':slotlib').extensions.getByType(org.gradle.api.tasks.SourceSetContainer).named('main').get()
-              }
+                  }
               client { }
               server { argument '--nogui' }
           }
